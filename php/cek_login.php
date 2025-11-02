@@ -24,11 +24,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             // Sukses login, simpan username ke session
             $_SESSION['username'] = $user['username'];
             echo '<div class="alert alert-success">Login berhasil!</div>';
-            header("Location: ../login.php?pesan=sukses_login");
+            header("Location: ../dashboard.php?pesan=sukses_login");
             // echo json_encode(['status' => 'success']);
         } else {
             // Password salah
-            echo '<div class="alert alert-success">Login gagal!</div>';
+            echo '<div class="alert alert-danger">Login gagal!</div>';
             header("Location: ../login.php?pesan=gagal_login");
             // echo json_encode(['status' => 'error', 'message' => 'Password salah']);
         }

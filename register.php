@@ -120,7 +120,7 @@
         <input type="password" id="password" name="konfirmasi_password" placeholder="Konfirmasi password" required />
       </div>
       <div class="mb-3">
-        <p>Have an account? Login, <a href="login.php"> here.</a></p>
+        <p>Have an account? Login, <a href="index.php"> here.</a></p>
       </div>
       <input type="submit" value="LOGIN" />
     </form>
