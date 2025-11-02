@@ -91,27 +91,22 @@
 
 <body>
   <div class="container">
-    <h2>Login</h2>
+    <h2>Register</h2>
     <!-- cek pesan notifikasi -->
     <?php
     if (isset($_GET['pesan'])) {
       echo "<div class='message'>";
-      if ($_GET['pesan'] == "gagal_login") {
+      if ($_GET['pesan'] == "gagal") {
         echo "Login gagal! Username dan password salah!";
       } else if ($_GET['pesan'] == "logout") {
         echo "Anda telah berhasil logout.";
       } else if ($_GET['pesan'] == "belum_login") {
         echo "Anda harus login untuk mengakses halaman admin.";
-      } else if ($_GET['pesan'] == "sukses_regist") {
-        echo "Registrasi berhasil! Silakan login.";
-      } else if ($_GET['pesan'] == "sukses_login") {
-        echo "Login berhasil!";
       }
-      // --- AKHIR TAMBAHAN ---
       echo "</div>";
     }
     ?>
-    <form method="POST" action="php/cek_login.php">
+    <form method="POST" action="php/proses_regist.php">
       <div class="form-group">
         <label for="username">Username</label>
         <input type="text" id="username" name="username" placeholder="Masukkan username" required />
@@ -120,8 +115,12 @@
         <label for="password">Password</label>
         <input type="password" id="password" name="password" placeholder="Masukkan password" required />
       </div>
+      <div class="form-group">
+        <label for="password">Confirm Password</label>
+        <input type="password" id="password" name="konfirmasi_password" placeholder="Konfirmasi password" required />
+      </div>
       <div class="mb-3">
-        <p>Don't have an account? Register, <a href="register.php"> here.</a></p>
+        <p>Have an account? Login, <a href="login.php"> here.</a></p>
       </div>
       <input type="submit" value="LOGIN" />
     </form>
