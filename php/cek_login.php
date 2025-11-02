@@ -29,7 +29,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         } else {
             // Password salah
             echo '<div class="alert alert-danger">Login gagal!</div>';
-            header("Location: ../login.php?pesan=gagal_login");
+            header("Location: ../index.php?pesan=gagal_login");
             // echo json_encode(['status' => 'error', 'message' => 'Password salah']);
         }
     } else {
