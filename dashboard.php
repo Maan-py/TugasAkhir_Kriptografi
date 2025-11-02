@@ -53,14 +53,14 @@ include "php/koneksi.php";
                         <div class="card-icon">📝</div>
                         <h3>Text Encryption</h3>
                         <p>Enkripsi teks dengan algoritma kriptografi</p>
-                        <a href="text-encryption.php" class="card-btn">Buka</a>
+                        <a href="menu/text-encryption.php" class="card-btn">Buka</a>
                     </div>
 
                     <div class="menu-card">
                         <div class="card-icon">📄</div>
                         <h3>Text Decryption</h3>
                         <p>Dekripsi teks terenkripsi</p>
-                        <a href="text-decryption.php" class="card-btn">Buka</a>
+                        <a href="menu/text-decryption.php" class="card-btn">Buka</a>
                     </div>
 
                     <!-- Steganography Encryption/Decryption -->
@@ -68,14 +68,14 @@ include "php/koneksi.php";
                         <div class="card-icon">🖼️</div>
                         <h3>Stegano Encryption</h3>
                         <p>Sembunyikan pesan dalam gambar</p>
-                        <a href="stegano-encryption.php" class="card-btn">Buka</a>
+                        <a href="menu/stegano-encryption.php" class="card-btn">Buka</a>
                     </div>
 
                     <div class="menu-card">
                         <div class="card-icon">🔍</div>
                         <h3>Stegano Decryption</h3>
                         <p>Ekstrak pesan dari gambar</p>
-                        <a href="stegano-decryption.php" class="card-btn">Buka</a>
+                        <a href="menu/stegano-decryption.php" class="card-btn">Buka</a>
                     </div>
 
                     <!-- File Encryption/Decryption -->
@@ -83,14 +83,14 @@ include "php/koneksi.php";
                         <div class="card-icon">🔒</div>
                         <h3>File Encryption</h3>
                         <p>Enkripsi file dengan keamanan tinggi</p>
-                        <a href="file-encryption.php" class="card-btn">Buka</a>
+                        <a href="menu/file-encryption.php" class="card-btn">Buka</a>
                     </div>
 
                     <div class="menu-card">
                         <div class="card-icon">🔓</div>
                         <h3>File Decryption</h3>
                         <p>Dekripsi file terenkripsi</p>
-                        <a href="file-decryption.php" class="card-btn">Buka</a>
+                        <a href="menu/file-decryption.php" class="card-btn">Buka</a>
                     </div>
                 </div>
             </div>
