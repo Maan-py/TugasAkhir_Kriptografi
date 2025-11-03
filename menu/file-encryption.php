@@ -14,32 +14,49 @@ $success = "";
 $encrypted_file = "";
 $original_filename = "";
 
-// Fungsi untuk mengenkripsi file menggunakan RC2-CBC
+$lastCryptoError = ""; // diisi jika ada error kripto
+
+// Fungsi untuk mengenkripsi file menggunakan RC2-CBC (pure PHP)
 function encryptFile($filePath, $outputPath, $password)
 {
-    $cipher = "RC2-CBC";
-    $key = hash('sha256', $password, true);
-    $ivlen = openssl_cipher_iv_length($cipher);
-    $iv = openssl_random_pseudo_bytes($ivlen);
+    global $lastCryptoError;
+    
+    $autoload = __DIR__ . '/../vendor/autoload.php';
+    if (file_exists($autoload)) {
+        require_once $autoload;
+    }
 
-    // Baca file
+    $key = md5($password, true);
+    $iv = random_bytes(8);
+
     $fileData = file_get_contents($filePath);
     if ($fileData === false) {
+        $lastCryptoError = "Gagal membaca file sumber.";
         return false;
     }
 
-    // Enkripsi data
-    $encrypted = openssl_encrypt($fileData, $cipher, $key, OPENSSL_RAW_DATA, $iv);
-    if ($encrypted === false) {
+    try {
+        // Tambahkan header + HMAC untuk verifikasi integritas/password saat dekripsi
+        $magic = "RC2FILEv1"; // 9 bytes magic
+        $hmac16 = substr(hash_hmac('sha256', $fileData, $key, true), 0, 16);
+        $payload = $magic . $hmac16 . $fileData;
+
+        if (class_exists('phpseclib3\\Crypt\\RC2')) {
+            $rc2Class = '\\phpseclib3\\Crypt\\RC2';
+            $rc2 = new $rc2Class('cbc');
+            $rc2->setKey($key);
+            $rc2->setIV($iv);
+            $ciphertext = $rc2->encrypt($payload);
+        } else {
+            throw new RuntimeException('Library RC2 tidak tersedia. Instal phpseclib: composer require phpseclib/phpseclib:^3.0');
+        }
+    } catch (Throwable $e) {
+        $lastCryptoError = $e->getMessage();
         return false;
     }
 
-    // Gabungkan IV dengan data terenkripsi
-    $encryptedData = $iv . $encrypted;
-
-    // Simpan dengan format base64
+    $encryptedData = $iv . $ciphertext;
     $result = file_put_contents($outputPath, base64_encode($encryptedData));
-
     return $result !== false;
 }
 
@@ -52,7 +69,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
     } elseif (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
         $error = "Silakan pilih file yang valid!";
     } else {
-        $uploadDir = "../uploads/files/";
+        $uploadDir = "../uploads/files/file_encrypted/";
         if (!is_dir($uploadDir)) {
             mkdir($uploadDir, 0777, true);
         }
@@ -68,11 +85,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
         if (move_uploaded_file($_FILES['file']['tmp_name'], $uploadFile)) {
             if (encryptFile($uploadFile, $outputFile, $password)) {
                 $encrypted_file = $encryptedFileName;
-                $success = "File berhasil dienkripsi! Silakan download file terenkripsi dan simpan password dengan aman.";
+                $success = "File berhasil dienkripsi!";
                 // Hapus file upload original
                 unlink($uploadFile);
             } else {
-                $error = "Gagal mengenkripsi file! Pastikan file valid dan tidak korup.";
+                $error = "Gagal mengenkripsi file! " . ($lastCryptoError ? $lastCryptoError : "Pastikan file valid dan tidak korup.");
                 unlink($uploadFile);
             }
         } else {
@@ -111,7 +128,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
         }
 
         .form-group input[type="file"],
-        .form-group input[type="password"] {
+        .form-group input[type="text"] {
             width: 100%;
             padding: 0.8rem;
             border: 1px solid #f3b7c0;
@@ -122,7 +139,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
         }
 
         .form-group input[type="file"]:focus,
-        .form-group input[type="password"]:focus {
+        .form-group input[type="text"]:focus {
             border-color: #e29fa6;
         }
 
@@ -286,7 +303,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
 
                     <div class="form-group">
                         <label for="password">Password Enkripsi:</label>
-                        <input type="password" name="password" id="password" placeholder="Masukkan password untuk enkripsi" required onkeyup="checkPasswordStrength(this.value)">
+                        <input type="text" name="password" id="password" placeholder="Masukkan password untuk enkripsi" required onkeyup="checkPasswordStrength(this.value)">
                         <div id="password-strength" class="password-strength"></div>
                         <p class="info-text">Gunakan password yang kuat dan simpan dengan aman. Anda akan membutuhkan password ini untuk dekripsi!</p>
                     </div>
@@ -300,53 +317,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
                         <a href="../dashboard.php" class="btn btn-secondary">Batal</a>
                     </div>
                 </form>
-
-                <?php if (!empty($encrypted_file)): ?>
-                    <div class="result-group">
-                        <label>File Terenkripsi:</label>
-                        <div class="file-info">
-                            <strong>Nama File:</strong> <?php echo htmlspecialchars($encrypted_file); ?><br>
-                            <strong>File Original:</strong> <?php echo htmlspecialchars($original_filename); ?>
-                        </div>
-                        <a href="../uploads/files/<?php echo htmlspecialchars($encrypted_file); ?>" download class="btn btn-download" style="margin-top: 1rem;">Download File Terenkripsi</a>
-                        <div class="password-warning" style="margin-top: 1rem;">
-                            <strong>Ingat:</strong> Simpan password Anda! File ini tidak dapat dibuka tanpa password.
-                        </div>
-                    </div>
-                <?php endif; ?>
             </div>
         </main>
     </div>
-
-    <script>
-        function checkPasswordStrength(password) {
-            const strengthDiv = document.getElementById('password-strength');
-            let strength = 0;
-            let feedback = '';
-
-            if (password.length >= 8) strength++;
-            else feedback = 'Minimal 8 karakter';
-
-            if (password.match(/[a-z]+/)) strength++;
-            if (password.match(/[A-Z]+/)) strength++;
-            if (password.match(/[0-9]+/)) strength++;
-            if (password.match(/[$@#&!]+/)) strength++;
-
-            if (password.length === 0) {
-                strengthDiv.textContent = '';
-                strengthDiv.className = 'password-strength';
-            } else if (strength <= 2) {
-                strengthDiv.textContent = 'Kekuatan: Lemah ' + (feedback ? '(' + feedback + ')' : '');
-                strengthDiv.className = 'password-strength strength-weak';
-            } else if (strength <= 4) {
-                strengthDiv.textContent = 'Kekuatan: Sedang';
-                strengthDiv.className = 'password-strength strength-medium';
-            } else {
-                strengthDiv.textContent = 'Kekuatan: Kuat';
-                strengthDiv.className = 'password-strength strength-strong';
-            }
-        }
-    </script>
 </body>
 
 </html>
