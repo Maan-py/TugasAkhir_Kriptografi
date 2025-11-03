@@ -271,7 +271,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
                         
                         <div class="form-group">
                             <label for="kunci_rc4_datadiri">Kunci RC4 Data Diri:</label>
-                            <input type="password" name="kunci_rc4_datadiri" id="kunci_rc4_datadiri" placeholder="Kunci rahasia untuk semua data diri" value="<?php echo htmlspecialchars($post_data['kunci_rc4_datadiri'] ?? ''); ?>">
+                            <input type="text" name="kunci_rc4_datadiri" id="kunci_rc4_datadiri" placeholder="Kunci rahasia untuk semua data diri" value="<?php echo htmlspecialchars($post_data['kunci_rc4_datadiri'] ?? ''); ?>">
                         </div>
                         <div class="form-group">
                             <label for="nama">Nama:</label>
@@ -306,7 +306,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
                         </div>
                         <div class="form-group">
                             <label for="kunci_des_pesan">Kunci Pesan - DES:</label>
-                            <input type="password" name="kunci_des_pesan" id="kunci_des_pesan" placeholder="Kunci untuk lapis 2 (DES) Pesan Bebas" value="<?php echo htmlspecialchars($post_data['kunci_des_pesan'] ?? ''); ?>">
+                            <input type="text" name="kunci_des_pesan" id="kunci_des_pesan" placeholder="Kunci untuk lapis 2 (DES) Pesan Bebas" value="<?php echo htmlspecialchars($post_data['kunci_des_pesan'] ?? ''); ?>">
                         </div>
                         <div class="form-group">
                             <label for="pesan_bebas">Pesan Bebas:</label>
