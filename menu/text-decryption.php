@@ -7,98 +7,164 @@ if (!isset($_SESSION['username'])) {
     exit();
 }
 
+// Koneksi dan Library
 include "../php/koneksi.php";
+require_once __DIR__ . '/../vendor/autoload.php'; // Panggil phpseclib
+$username = $_SESSION['username'];
 
-$decrypted_text = "";
-$input_text = "";
-$algorithm = "base64";
-$error = "";
-$success = "";
+// Gunakan Class Kriptografi
+use phpseclib3\Crypt\RC4;
+use phpseclib3\Crypt\DES;
 
-// Proses dekripsi
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt'])) {
-    $input_text = $_POST['text'];
-    $algorithm = $_POST['algorithm'];
+// --- FUNGSI VIGENERE DECRYPT ---
+function vigenere_decrypt($ciphertext, $key) {
+    $key = strtoupper($key);
+    $key_len = strlen($key);
+    $key_idx = 0;
+    $plaintext = "";
 
-    if (empty($input_text)) {
-        $error = "Silakan masukkan teks yang akan didekripsi!";
+    if ($key_len == 0) return $ciphertext; // Kunci kosong
+
+    for ($i = 0; $i < strlen($ciphertext); $i++) {
+        $char = $ciphertext[$i];
+        
+        if (ctype_alpha($char)) {
+            $is_upper = ctype_upper($char);
+            $char_ord = ord($char);
+            $key_char = $key[$key_idx % $key_len];
+            $key_ord = ord($key_char);
+            
+            $base = $is_upper ? 65 : 97;
+            
+            // Rumus Dekripsi Vigenere: (C - K + 26) mod 26
+            $decrypted_ord = ($char_ord - $base - ($key_ord - 65) + 26) % 26 + $base;
+            $plaintext .= chr($decrypted_ord);
+            
+            $key_idx++;
+        } else {
+            $plaintext .= $char;
+        }
+    }
+    return $plaintext;
+}
+// --- AKHIR FUNGSI VIGENERE ---
+
+
+// Inisialisasi variabel
+$errors = [];
+$post_data = []; // Untuk menyimpan kunci yang di-submit
+$decrypted_results = []; // Untuk menyimpan hasil dekripsi
+$data_list = []; // Untuk daftar data
+$current_data = null; // Untuk data yang sedang dilihat detailnya
+$data_id = null;
+
+// Tentukan Tampilan (View)
+// 1. 'list' (default): Menampilkan daftar semua data
+// 2. 'detail': Menampilkan rincian 1 data + form kunci
+$view = $_GET['view'] ?? 'list';
+
+
+if ($view == 'list') {
+    // TAMPILAN 1: Ambil DAFTAR data milik user
+    $stmt_list = $konek->prepare("SELECT data_id, data_label, created_at FROM usersData WHERE username = ? ORDER BY created_at DESC");
+    $stmt_list->bind_param("s", $username);
+    $stmt_list->execute();
+    $data_list = $stmt_list->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt_list->close();
+
+} elseif ($view == 'detail') {
+    // TAMPILAN 2: Ambil DETAIL 1 data
+    if (!isset($_GET['id'])) {
+        $errors[] = "ID Data tidak ditemukan.";
+        $view = 'list'; // Kembalikan ke list jika ID tidak ada
     } else {
-        // Proses dekripsi berdasarkan algoritma
-        switch ($algorithm) {
-            case "base64":
-                $decoded = base64_decode($input_text, true);
-                if ($decoded !== false) {
-                    $decrypted_text = $decoded;
-                } else {
-                    $error = "Format Base64 tidak valid!";
-                }
-                break;
-            case "caesar":
-                $shift = 3; // Caesar cipher dengan shift 3 (kebalikan dari enkripsi)
-                $decrypted_text = "";
-                for ($i = 0; $i < strlen($input_text); $i++) {
-                    $char = $input_text[$i];
-                    if (ctype_alpha($char)) {
-                        $ascii = ord($char);
-                        $shifted = $ascii - $shift; // Shift ke kiri untuk dekripsi
-                        if (ctype_upper($char)) {
-                            if ($shifted < 65) {
-                                $shifted = $shifted + 26;
-                            }
-                        } else {
-                            if ($shifted < 97) {
-                                $shifted = $shifted + 26;
-                            }
-                        }
-                        $decrypted_text .= chr($shifted);
-                    } else {
-                        $decrypted_text .= $char;
-                    }
-                }
-                break;
-            case "md5":
-                $error = "MD5 adalah one-way hash dan tidak dapat didekripsi. Hash digunakan untuk verifikasi, bukan untuk dekripsi.";
-                break;
-            case "sha256":
-                $error = "SHA-256 adalah one-way hash dan tidak dapat didekripsi. Hash digunakan untuk verifikasi, bukan untuk dekripsi.";
-                break;
-            case "aes":
-                // AES decryption menggunakan OpenSSL
-                $key = "TaKripto2024Key!"; // Key untuk AES (harus sama dengan saat enkripsi)
-                $cipher = "AES-128-CBC";
-                try {
-                    $data = base64_decode($input_text, true);
-                    if ($data === false) {
-                        $error = "Format enkripsi AES tidak valid!";
-                        break;
-                    }
-                    $parts = explode('::', $data, 2);
-                    if (count($parts) != 2) {
-                        $error = "Format enkripsi AES tidak valid! Pastikan teks dienkripsi dengan AES-128-CBC.";
-                        break;
-                    }
-                    $encrypted = $parts[0];
-                    $iv = $parts[1];
-                    $decrypted_text = openssl_decrypt($encrypted, $cipher, $key, 0, $iv);
-                    if ($decrypted_text === false) {
-                        $error = "Gagal mendekripsi! Pastikan teks dienkripsi dengan key yang sama.";
-                    }
-                } catch (Exception $e) {
-                    $error = "Error saat dekripsi: " . $e->getMessage();
-                }
-                break;
-            default:
-                $decoded = base64_decode($input_text, true);
-                if ($decoded !== false) {
-                    $decrypted_text = $decoded;
-                } else {
-                    $error = "Format tidak valid!";
-                }
-        }
+        $data_id = (int)$_GET['id'];
+        
+        // Query keamanan: AMBIL HANYA data_id JIKA ITU MILIK user
+        $stmt_detail = $konek->prepare("SELECT * FROM usersData WHERE data_id = ? AND username = ?");
+        $stmt_detail->bind_param("is", $data_id, $username);
+        $stmt_detail->execute();
+        $current_data = $stmt_detail->get_result()->fetch_assoc();
+        $stmt_detail->close();
 
-        if (!empty($decrypted_text) && empty($error)) {
-            $success = "Teks berhasil didekripsi!";
+        if (!$current_data) {
+            $errors[] = "Data tidak ditemukan atau Anda tidak punya akses.";
+            $view = 'list'; // Kembalikan ke list jika data tidak valid
         }
+    }
+}
+
+
+// --- PROSES DEKRIPSI (SAAT FORM DI-SUBMIT) ---
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt_data']) && $current_data) {
+    
+    $post_data = $_POST; // Simpan kunci yang dimasukkan
+
+    // Cek jika tidak ada kunci yang dimasukkan
+    if (empty($_POST['kunci_rc4_datadiri']) && (empty($_POST['kunci_vigenere']) || empty($_POST['kunci_des_pesan']))) {
+        $errors[] = "Anda harus memasukkan setidaknya satu set kunci (RC4 atau Vigenere+DES) untuk memulai dekripsi.";
+    }
+
+    // --- PROSES BAGIAN A: DATA DIRI (RC4) ---
+    if (!empty($_POST['kunci_rc4_datadiri'])) {
+        if (!empty($current_data['enc_nama'])) {
+            try {
+                $rc4 = new RC4();
+                $kunci_rc4 = $_POST['kunci_rc4_datadiri'];
+                $rc4->setKey($kunci_rc4);
+                
+                // Urutan dekripsi HARUS SAMA PERSIS dengan enkripsi
+                $decrypted_results['Data Diri'] = [
+                    'Nama' => $rc4->decrypt(hex2bin($current_data['enc_nama'])),
+                    'Telepon' => $rc4->decrypt(hex2bin($current_data['enc_telepon'])),
+                    'Tempat Lahir' => $rc4->decrypt(hex2bin($current_data['enc_tempat_lahir'])),
+                    'Tanggal Lahir' => $rc4->decrypt(hex2bin($current_data['enc_tanggal_lahir'])),
+                    'Alamat' => $rc4->decrypt(hex2bin($current_data['enc_alamat'])),
+                ];
+
+            } catch (Exception $e) {
+                $errors[] = "Gagal dekripsi Data Diri (RC4): Kunci salah atau data korup.";
+            }
+        } else {
+            $errors[] = "Anda memasukkan kunci RC4, tapi data diri tidak ditemukan di set data ini.";
+        }
+    }
+
+    // --- PROSES BAGIAN B: PESAN BEBAS (DES -> VIGENERE) ---
+    if (!empty($_POST['kunci_vigenere']) && !empty($_POST['kunci_des_pesan'])) {
+         if (!empty($current_data['enc_pesan_bebas'])) {
+            try {
+                // 1. Decode Hex
+                $encrypted_raw_pesan = hex2bin($current_data['enc_pesan_bebas']);
+                
+                // 2. Dekripsi Lapis 1 (DES)
+                $des = new DES('cbc');
+                $kunci_des = $_POST['kunci_des_pesan'];
+                
+                // Turunkan Kunci 8-byte dan IV 8-byte (HARUS SAMA DENGAN ENKRIPSI)
+                $key_hash = hash('md5', $kunci_des, true); // 16 bytes
+                $des_key_8byte = substr($key_hash, 0, 8);
+                $des_iv_8byte = substr($key_hash, 8, 8);
+
+                $des->setKey($des_key_8byte);
+                $des->setIV($des_iv_8byte);
+                
+                $vigenere_result = $des->decrypt($encrypted_raw_pesan);
+
+                if ($vigenere_result === false) {
+                    $errors[] = "Gagal mendekripsi Pesan Bebas (Lapis DES): Kunci DES salah atau data korup.";
+                } else {
+                    // 3. Dekripsi Lapis 2 (Vigenere)
+                    $decrypted_plaintext = vigenere_decrypt($vigenere_result, $_POST['kunci_vigenere']);
+                    $decrypted_results['Pesan Bebas'] = $decrypted_plaintext;
+                }
+
+            } catch (Exception $e) {
+                $errors[] = "Gagal dekripsi Pesan Bebas: " . $e->getMessage();
+            }
+         } else {
+             $errors[] = "Anda memasukkan kunci Vigenere+DES, tapi pesan bebas tidak ditemukan di set data ini.";
+         }
     }
 }
 ?>
@@ -108,162 +174,19 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt'])) {
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Text Decryption - Kriptografi</title>
+    <title>Text Decryption (Ambil dari DB) - Kriptografi</title>
     <link rel="stylesheet" href="../css/dashboard.css">
-    <style>
-        .encryption-container {
-            background-color: #fff;
-            border-radius: 10px;
-            padding: 2rem;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            max-width: 900px;
-            margin: 0 auto;
-        }
-
-        .form-group {
-            margin-bottom: 1.5rem;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 0.5rem;
-            color: #b56576;
-            font-weight: 600;
-        }
-
-        .form-group select,
-        .form-group textarea {
-            width: 100%;
-            padding: 0.8rem;
-            border: 1px solid #f3b7c0;
-            border-radius: 5px;
-            font-size: 1rem;
-            font-family: inherit;
-            outline: none;
-        }
-
-        .form-group select:focus,
-        .form-group textarea:focus {
-            border-color: #e29fa6;
-        }
-
-        .form-group textarea {
-            min-height: 150px;
-            resize: vertical;
-        }
-
-        .result-group {
-            margin-top: 2rem;
-            padding-top: 2rem;
-            border-top: 2px solid #f3b7c0;
-        }
-
-        .result-box {
-            background-color: #f8f9fa;
-            padding: 1rem;
-            border-radius: 5px;
-            border: 1px solid #e9ecef;
-            word-wrap: break-word;
-            min-height: 100px;
-            font-family: 'Courier New', monospace;
-        }
-
-        .btn-group {
-            display: flex;
-            gap: 1rem;
-            margin-top: 1.5rem;
-        }
-
-        .btn {
-            padding: 0.8rem 2rem;
-            border: none;
-            border-radius: 5px;
-            font-size: 1rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: background 0.3s ease;
-            text-decoration: none;
-            display: inline-block;
-            text-align: center;
-        }
-
-        .btn-primary {
-            background-color: #f28c98;
-            color: #fff;
-        }
-
-        .btn-primary:hover {
-            background-color: #e0717d;
-        }
-
-        .btn-secondary {
-            background-color: #6c757d;
-            color: #fff;
-        }
-
-        .btn-secondary:hover {
-            background-color: #5a6268;
-        }
-
-        .btn-copy {
-            background-color: #17a2b8;
-            color: #fff;
-            padding: 0.6rem 1.5rem;
-            font-size: 0.9rem;
-        }
-
-        .btn-copy:hover {
-            background-color: #138496;
-        }
-
-        .alert-error {
-            background-color: #f8d7da;
-            color: #721c24;
-            padding: 1rem;
-            border-radius: 5px;
-            margin-bottom: 1rem;
-            border: 1px solid #f5c6cb;
-        }
-
-        .back-link {
-            margin-bottom: 1.5rem;
-            display: inline-block;
-            color: #e29fa6;
-            text-decoration: none;
-            font-weight: 500;
-        }
-
-        .back-link:hover {
-            color: #b56576;
-            text-decoration: underline;
-        }
-
-        .info-text {
-            font-size: 0.9rem;
-            color: #666;
-            margin-top: 0.5rem;
-            font-style: italic;
-        }
-
-        .warning-text {
-            font-size: 0.85rem;
-            color: #856404;
-            margin-top: 0.5rem;
-            padding: 0.75rem;
-            background-color: #fff3cd;
-            border-left: 4px solid #ffc107;
-            border-radius: 4px;
-        }
-    </style>
+    <!-- Panggil CSS Eksternal BARU -->
+    <link rel="stylesheet" href="../css/textED.css">
 </head>
 
 <body>
     <div class="dashboard-container">
         <header class="dashboard-header">
             <div class="header-content">
-                <h1>Text Decryption</h1>
+                <h1>Dekripsi Data Tersimpan</h1>
                 <div class="user-info">
-                    <span class="welcome-text">User: <strong><?php echo htmlspecialchars($_SESSION['username']); ?></strong></span>
+                    <span class="welcome-text">User: <strong><?php echo htmlspecialchars($username); ?></strong></span>
                     <a href="../php/logout.php" class="logout-btn">Logout</a>
                 </div>
             </div>
@@ -271,98 +194,187 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt'])) {
 
         <main class="dashboard-main">
             <div class="encryption-container">
-                <a href="../dashboard.php" class="back-link">← Kembali ke Dashboard</a>
-
-                <h2 style="color: #e29fa6; margin-bottom: 1rem;">Dekripsi Teks</h2>
-                <p style="color: #666; margin-bottom: 2rem;">Masukkan teks terenkripsi yang ingin Anda dekripsi dan pilih algoritma yang sama dengan saat enkripsi</p>
-
-                <?php if (!empty($error)): ?>
-                    <div class="alert-error"><?php echo htmlspecialchars($error); ?></div>
+                
+                <!-- Tampilkan link "Kembali" yang berbeda tergantung view -->
+                <?php if ($view == 'list'): ?>
+                    <a href="../dashboard.php" class="back-link">← Kembali ke Dashboard</a>
+                <?php else: ?>
+                    <a href="text-decryption.php" class="back-link">← Kembali ke Daftar Data</a>
                 <?php endif; ?>
 
-                <?php if (!empty($success)): ?>
-                    <div class="alert alert-success"><?php echo htmlspecialchars($success); ?></div>
-                <?php endif; ?>
 
-                <form method="POST" action="">
-                    <div class="form-group">
-                        <label for="algorithm">Pilih Algoritma Dekripsi:</label>
-                        <select name="algorithm" id="algorithm" required onchange="showWarning(this.value)">
-                            <option value="base64" <?php echo ($algorithm == "base64") ? "selected" : ""; ?>>Base64</option>
-                            <option value="caesar" <?php echo ($algorithm == "caesar") ? "selected" : ""; ?>>Caesar Cipher</option>
-                            <option value="md5" <?php echo ($algorithm == "md5") ? "selected" : ""; ?>>MD5 Hash</option>
-                            <option value="sha256" <?php echo ($algorithm == "sha256") ? "selected" : ""; ?>>SHA-256 Hash</option>
-                            <option value="aes" <?php echo ($algorithm == "aes") ? "selected" : ""; ?>>AES-128-CBC</option>
-                        </select>
-                        <div id="hash-warning" style="display: none;" class="warning-text">
-                            <strong>Perhatian:</strong> MD5 dan SHA-256 adalah one-way hash function dan tidak dapat didekripsi. Hash digunakan untuk verifikasi integritas data, bukan untuk dekripsi.
+                <h2 style="color: #e29fa6; margin-bottom: 1rem;">Dekripsi Data dari Database</h2>
+                
+                <?php if (!empty($errors)): ?>
+                    <div class="alert-error">
+                        <strong>Terjadi Kesalahan:</strong>
+                        <ul>
+                            <?php foreach ($errors as $err): ?>
+                                <li><?php echo htmlspecialchars($err); ?></li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
+                <?php endif; ?>
+                
+                <!-- ======================================================= -->
+                <!-- ============ TAMPILAN 1: DAFTAR DATA (LIST) ============ -->
+                <!-- ======================================================= -->
+                <?php if ($view == 'list'): ?>
+                
+                    <p style="color: #666; margin-bottom: 2rem;">Berikut adalah daftar data terenkripsi yang Anda simpan di database. Pilih data untuk dilihat rinciannya dan didekripsi.</p>
+
+                    <?php if (empty($data_list)): ?>
+                        <div class="alert-info">
+                            Anda belum memiliki data terenkripsi yang tersimpan di database. Silakan gunakan menu "Enkripsi & Simpan Data" terlebih dahulu.
                         </div>
-                        <p class="info-text">
-                            <strong>Base64:</strong> Decode dari Base64 |
-                            <strong>Caesar:</strong> Shift cipher kembali |
-                            <strong>MD5/SHA-256:</strong> Tidak dapat didekripsi (one-way) |
-                            <strong>AES:</strong> Dekripsi simetris
-                        </p>
+                    <?php else: ?>
+                        <table class="data-list-table">
+                            <thead>
+                                <tr>
+                                    <th>No.</th>
+                                    <th>Label Data</th>
+                                    <th>Tanggal Disimpan</th>
+                                    <th>Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($data_list as $index => $item): ?>
+                                <tr>
+                                    <td><?php echo $index + 1; ?></td>
+                                    <td><?php echo htmlspecialchars($item['data_label']); ?></td>
+                                    <td><?php echo htmlspecialchars(date('d F Y H:i', strtotime($item['created_at']))); ?></td>
+                                    <td>
+                                        <a href="text-decryption.php?view=detail&id=<?php echo $item['data_id']; ?>" class="btn-detail">Lihat Detail & Dekripsi</a>
+                                    </td>
+                                </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    <?php endif; ?>
+                
+                
+                <!-- ======================================================= -->
+                <!-- ============ TAMPILAN 2: DETAIL & DEKRIPSI ============ -->
+                <!-- ======================================================= -->
+                <?php elseif ($view == 'detail' && $current_data): ?>
+                
+                    <p style="color: #666; margin-bottom: 2rem;">Anda sedang melihat data: <strong>"<?php echo htmlspecialchars($current_data['data_label']); ?>"</strong> (disimpan pada <?php echo htmlspecialchars(date('d F Y', strtotime($current_data['created_at']))); ?>).</p>
+
+                    <!-- RINCIAN CIPHERTEXT (YANG KAMU MINTA) -->
+                    <div class="cipher-detail-box">
+                        <h3>Rincian Ciphertext</h3>
+                        
+                        <?php if(!empty($current_data['enc_nama'])): ?>
+                            <div class="cipher-field">
+                                <strong>Cipher - Nama:</strong>
+                                <span><?php echo htmlspecialchars($current_data['enc_nama']); ?></span>
+                            </div>
+                            <div class="cipher-field">
+                                <strong>Cipher - Telepon:</strong>
+                                <span><?php echo htmlspecialchars($current_data['enc_telepon']); ?></span>
+                            </div>
+                            <div class="cipher-field">
+                                <strong>Cipher - Tempat Lahir:</strong>
+                                <span><?php echo htmlspecialchars($current_data['enc_tempat_lahir']); ?></span>
+                            </div>
+                            <div class="cipher-field">
+                                <strong>Cipher - Tanggal Lahir:</strong>
+                                <span><?php echo htmlspecialchars($current_data['enc_tanggal_lahir']); ?></span>
+                            </div>
+                            <div class="cipher-field">
+                                <strong>Cipher - Alamat:</strong>
+                                <span><?php echo htmlspecialchars($current_data['enc_alamat']); ?></span>
+                            </div>
+                        <?php else: ?>
+                             <div class="alert-info" style="margin-bottom: 1rem;">Tidak ada Data Diri tersimpan di set data ini.</div>
+                        <?php endif; ?>
+
+                        <hr style="border:0; border-top: 1px solid #f3b7c0; margin: 1.5rem 0;">
+
+                        <?php if(!empty($current_data['enc_pesan_bebas'])): ?>
+                             <div class="cipher-field">
+                                <strong>Cipher - Pesan Bebas (Vigenere+DES):</strong>
+                                <span><?php echo htmlspecialchars($current_data['enc_pesan_bebas']); ?></span>
+                            </div>
+                        <?php else: ?>
+                             <div class="alert-info" style="margin-bottom: 1rem;">Tidak ada Pesan Bebas tersimpan di set data ini.</div>
+                        <?php endif; ?>
                     </div>
 
-                    <div class="form-group">
-                        <label for="text">Masukkan Teks Terenkripsi:</label>
-                        <textarea name="text" id="text" placeholder="Masukkan teks terenkripsi yang akan didekripsi..." required><?php echo htmlspecialchars($input_text); ?></textarea>
-                    </div>
+                    <!-- FORM KUNCI DEKRIPSI -->
+                    <form method="POST" action="text-decryption.php?view=detail&id=<?php echo $data_id; ?>">
+                        
+                        <!-- GRUP KUNCI DATA DIRI -->
+                        <fieldset>
+                            <legend>Bagian A: Dekripsi Data Diri (RC4)</legend>
+                            <p class="info-text" style="margin-bottom: 1rem;">Masukkan kunci RC4 untuk mendekripsi Data Diri di atas.</p>
+                            
+                            <div class="form-group">
+                                <label for="kunci_rc4_datadiri">Kunci RC4 Data Diri:</label>
+                                <input type="password" name="kunci_rc4_datadiri" id="kunci_rc4_datadiri" placeholder="Kunci rahasia untuk semua data diri" value="<?php echo htmlspecialchars($post_data['kunci_rc4_datadiri'] ?? ''); ?>">
+                            </div>
+                        </fieldset>
 
-                    <div class="btn-group">
-                        <button type="submit" name="decrypt" class="btn btn-primary">Dekripsi</button>
-                        <a href="../dashboard.php" class="btn btn-secondary">Batal</a>
-                    </div>
-                </form>
+                        <!-- GRUP KUNCI PESAN BEBAS -->
+                        <fieldset>
+                            <legend>Bagian B: Dekripsi Pesan Bebas (Vigenere + DES)</legend>
+                            <p class="info-text" style="margin-bottom: 1rem;">Masukkan 2 kunci untuk mendekripsi Pesan Bebas di atas.</p>
+                            
+                            <div class="form-group">
+                                <label for="kunci_vigenere">Kunci Pesan - Vigenere:</label>
+                                <input type="text" name="kunci_vigenere" id="kunci_vigenere" placeholder="Kunci untuk lapis 1 (Vigenere) Pesan Bebas" value="<?php echo htmlspecialchars($post_data['kunci_vigenere'] ?? ''); ?>">
+                            </div>
+                            <div class="form-group">
+                                <label for="kunci_des_pesan">Kunci Pesan - DES:</label>
+                                <input type="password" name="kunci_des_pesan" id="kunci_des_pesan" placeholder="Kunci untuk lapis 2 (DES) Pesan Bebas" value="<?php echo htmlspecialchars($post_data['kunci_des_pesan'] ?? ''); ?>">
+                            </div>
+                        </fieldset>
 
-                <?php if (!empty($decrypted_text)): ?>
-                    <div class="result-group">
-                        <label>Teks Terdekripsi:</label>
-                        <div class="result-box" id="decrypted-result"><?php echo htmlspecialchars($decrypted_text); ?></div>
-                        <button type="button" class="btn btn-copy" onclick="copyToClipboard()" style="margin-top: 1rem;">Salin Hasil</button>
-                    </div>
+                        <div class="btn-group">
+                            <button type="submit" name="decrypt_data" class="btn btn-primary">Dekripsi Data Ini</button>
+                        </div>
+                    </form>
+
+                    <!-- HASIL DEKRIPSI (JIKA SUKSES) -->
+                    <?php if (!empty($decrypted_results)): ?>
+                        <div class="result-group">
+                            <h2 style="color: #e29fa6; margin-bottom: 1rem;">Hasil Dekripsi</h2>
+                            
+                            <!-- Hasil Bagian A: Data Diri -->
+                            <?php if (isset($decrypted_results['Data Diri'])): 
+                                $res_dd = $decrypted_results['Data Diri'];
+                            ?>
+                                <fieldset>
+                                    <legend>Data Diri (RC4)</legend>
+                                    <div class="result-box">
+                                        <span class="result-box-field">Nama:</span> <?php echo htmlspecialchars($res_dd['Nama']); ?><br>
+                                        <span class="result-box-field">Telepon:</span> <?php echo htmlspecialchars($res_dd['Telepon']); ?><br>
+                                        <span class="result-box-field">Tempat Lahir:</span> <?php echo htmlspecialchars($res_dd['Tempat Lahir']); ?><br>
+                                        <span class="result-box-field">Tanggal Lahir:</span> <?php echo htmlspecialchars($res_dd['Tanggal Lahir']); ?><br>
+                                        <span class="result-box-field">Alamat:</span> <?php echo htmlspecialchars($res_dd['Alamat']); ?>
+                                    </div>
+                                </fieldset>
+                            <?php endif; ?>
+
+                            <!-- Hasil Bagian B: Pesan Bebas -->
+                            <?php if (isset($decrypted_results['Pesan Bebas'])): 
+                                $res_pb = $decrypted_results['Pesan Bebas'];
+                            ?>
+                                 <fieldset style="margin-top: 2rem;">
+                                    <legend>Pesan Bebas (Vigenere + DES)</legend>
+                                    <div class="result-box">
+                                        <?php echo nl2br(htmlspecialchars($res_pb)); // nl2br agar baris baru di plaintext tampil ?>
+                                    </div>
+                                </fieldset>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
+
                 <?php endif; ?>
+                    
             </div>
         </main>
     </div>
-
-    <script>
-        function showWarning(value) {
-            const warning = document.getElementById('hash-warning');
-            if (value === 'md5' || value === 'sha256') {
-                warning.style.display = 'block';
-            } else {
-                warning.style.display = 'none';
-            }
-        }
-
-        // Tampilkan warning saat halaman dimuat jika algoritma hash dipilih
-        window.onload = function() {
-            const algorithm = document.getElementById('algorithm');
-            showWarning(algorithm.value);
-        };
-
-        function copyToClipboard() {
-            const resultBox = document.getElementById('decrypted-result');
-            const text = resultBox.textContent;
-
-            navigator.clipboard.writeText(text).then(function() {
-                alert('Teks berhasil disalin ke clipboard!');
-            }, function(err) {
-                // Fallback untuk browser yang tidak support clipboard API
-                const textArea = document.createElement('textarea');
-                textArea.value = text;
-                textArea.style.position = 'fixed';
-                textArea.style.left = '-999999px';
-                document.body.appendChild(textArea);
-                textArea.select();
-                document.execCommand('copy');
-                textArea.remove();
-                alert('Teks berhasil disalin ke clipboard!');
-            });
-        }
-    </script>
 </body>
-
 </html>
+

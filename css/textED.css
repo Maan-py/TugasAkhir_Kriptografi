@@ -1,0 +1,289 @@
+/* --- Styling untuk text-encryption.php & text-decryption.php --- */
+
+.encryption-container {
+    background-color: #fff;
+    border-radius: 10px;
+    padding: 2rem;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: #b56576;
+    font-weight: 600;
+}
+
+.form-group input[type="password"],
+.form-group input[type="text"],
+.form-group input[type="date"],
+.form-group textarea {
+    width: 100%;
+    padding: 0.8rem;
+    border: 1px solid #f3b7c0;
+    border-radius: 5px;
+    font-size: 1rem;
+    font-family: inherit;
+    outline: none;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+    border-color: #e29fa6;
+}
+
+.form-group textarea {
+    min-height: 120px;
+    resize: vertical;
+}
+
+/* --- Result Box (Hasil Enkripsi/Dekripsi) --- */
+.result-group {
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 2px solid #f3b7c0;
+}
+
+.result-box {
+    background-color: #f8f9fa;
+    padding: 1rem;
+    border-radius: 5px;
+    border: 1px solid #e9ecef;
+    word-wrap: break-word;
+    min-height: 50px;
+    font-family: 'Courier New', monospace;
+    word-break: break-all; /* Biar hex pindah baris */
+    margin-bottom: 1rem;
+}
+
+.result-box-label {
+    font-weight: bold;
+    color: #b56576;
+    margin-bottom: 0.25rem;
+    font-size: 0.9rem;
+}
+
+.result-box-field {
+    font-weight: bold;
+    color: #333;
+    font-family: Arial, sans-serif;
+}
+
+
+/* --- Tombol --- */
+.btn-group {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.btn {
+    padding: 0.8rem 2rem;
+    border: none;
+    border-radius: 5px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.3s ease;
+    text-decoration: none;
+    display: inline-block;
+    text-align: center;
+}
+
+.btn-primary {
+    background-color: #f28c98;
+    color: #fff;
+}
+
+.btn-primary:hover {
+    background-color: #e0717d;
+}
+
+.btn-secondary {
+    background-color: #6c757d;
+    color: #fff;
+}
+
+.btn-secondary:hover {
+    background-color: #5a6268;
+}
+
+/* --- Alerts --- */
+.alert-error {
+    background-color: #f8d7da;
+    color: #721c24;
+    padding: 1rem;
+    border-radius: 5px;
+    margin-bottom: 1rem;
+    border: 1px solid #f5c6cb;
+}
+
+.alert-db-success {
+    background-color: #d4edda;
+    color: #155724;
+    padding: 1rem;
+    border-radius: 5px;
+    margin-bottom: 1rem;
+    border: 1px solid #c3e6cb;
+}
+
+.alert-db-error {
+    background-color: #f8d7da;
+    color: #721c24;
+    padding: 1rem;
+    border-radius: 5px;
+    margin-bottom: 1rem;
+    border: 1px solid #f5c6cb;
+}
+
+.alert-info {
+    background-color: #d1ecf1;
+    color: #0c5460;
+    padding: 1rem;
+    border-radius: 5px;
+    margin-bottom: 1rem;
+    border: 1px solid #bee5eb;
+}
+
+/* --- Link Navigasi --- */
+.back-link {
+    margin-bottom: 1.5rem;
+    display: inline-block;
+    color: #e29fa6;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.back-link:hover {
+    color: #b56576;
+    text-decoration: underline;
+}
+
+.info-text {
+    font-size: 0.9rem;
+    color: #666;
+    margin-top: 0.5rem;
+    font-style: italic;
+}
+
+/* --- Fieldset (Box Pink) --- */
+fieldset {
+    border: 2px solid #f3b7c0;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+legend {
+    color: #e29fa6;
+    font-weight: bold;
+    font-size: 1.2rem;
+    padding: 0 0.5rem;
+}
+
+/* --- Steps Box --- */
+.result-steps {
+    background-color: #fdf6f7;
+    border: 1px dashed #e29fa6;
+    padding: 1rem;
+    border-radius: 5px;
+    margin-top: 1.5rem;
+}
+.result-steps h4 {
+    color: #b56576;
+    margin-bottom: 0.5rem;
+}
+.result-steps p {
+    font-size: 0.9rem;
+    color: #333;
+    line-height: 1.6;
+    margin-bottom: 0.5rem;
+}
+.step-data {
+    font-family: 'Courier New', monospace;
+    color: #d9534f;
+    word-break: break-all;
+}
+
+/* --- Gaya untuk DAFTAR DATA (BARU!) --- */
+.data-list-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 2rem;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+}
+
+.data-list-table th,
+.data-list-table td {
+    padding: 1rem;
+    text-align: left;
+    border-bottom: 1px solid #f3b7c0;
+}
+
+.data-list-table th {
+    background-color: #fdf6f7;
+    color: #b56576;
+    font-weight: 600;
+}
+
+.data-list-table td {
+    background-color: #fff;
+    color: #333;
+}
+
+.data-list-table tr:last-child td {
+    border-bottom: 2px solid #f3b7c0;
+}
+
+.data-list-table tr:hover td {
+    background-color: #fefcfc;
+}
+
+.btn-detail {
+    background-color: #17a2b8;
+    color: #fff;
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+    border-radius: 5px;
+    text-decoration: none;
+    transition: background-color 0.3s;
+}
+
+.btn-detail:hover {
+    background-color: #138496;
+}
+
+/* --- Gaya untuk RINCIAN CIPHERTEXT (BARU!) --- */
+.cipher-detail-box {
+    background-color: #fff;
+    border: 2px solid #f3b7c0;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+.cipher-detail-box h3 {
+    color: #e29fa6;
+    border-bottom: 1px solid #f3b7c0;
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+}
+.cipher-detail-box .cipher-field {
+    margin-bottom: 1rem;
+    font-size: 0.95rem;
+}
+.cipher-detail-box .cipher-field strong {
+    color: #b56576;
+    display: block;
+    margin-bottom: 0.25rem;
+}
+.cipher-detail-box .cipher-field span {
+    font-family: 'Courier New', monospace;
+    color: #666;
+    word-break: break-all;
+}
