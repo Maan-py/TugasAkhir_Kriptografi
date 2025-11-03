@@ -14,38 +14,83 @@ $success = "";
 $decrypted_file = "";
 $original_filename = "";
 
-// Fungsi untuk mendekripsi file menggunakan RC2-CBC
+$lastCryptoError = ""; // diisi jika ada error kripto
+
 function decryptFile($filePath, $outputPath, $password)
 {
-    $cipher = "RC2-CBC";
-    $key = hash('sha256', $password, true);
-    $ivlen = openssl_cipher_iv_length($cipher);
+    global $lastCryptoError;
+    
+    $autoload = __DIR__ . '/../vendor/autoload.php';
+    if (file_exists($autoload)) {
+        require_once $autoload;
+    }
 
-    // Baca file terenkripsi
+    $key = md5($password, true);
+
     $encryptedDataBase64 = file_get_contents($filePath);
     if ($encryptedDataBase64 === false) {
+        $lastCryptoError = "Gagal membaca file terenkripsi.";
         return false;
     }
-
-    // Decode dari base64
     $encryptedData = base64_decode($encryptedDataBase64, true);
     if ($encryptedData === false) {
+        $lastCryptoError = "Format file terenkripsi tidak valid (bukan Base64).";
+        return false;
+    }
+    if (strlen($encryptedData) < 8) {
+        $lastCryptoError = "Data terenkripsi terlalu pendek.";
         return false;
     }
 
-    // Ekstrak IV (8 byte pertama untuk RC2)
-    $iv = substr($encryptedData, 0, $ivlen);
-    $encrypted = substr($encryptedData, $ivlen);
+    $iv = substr($encryptedData, 0, 8);
+    $encrypted = substr($encryptedData, 8);
 
-    // Dekripsi
-    $decrypted = openssl_decrypt($encrypted, $cipher, $key, OPENSSL_RAW_DATA, $iv);
-    if ($decrypted === false) {
+    try {
+        if (class_exists('phpseclib3\\Crypt\\RC2')) {
+            $rc2Class = '\\phpseclib3\\Crypt\\RC2';
+            $rc2 = new $rc2Class('cbc');
+            $rc2->setKey($key);
+            $rc2->setIV($iv);
+            $decrypted = $rc2->decrypt($encrypted);
+        } else {
+            $lastCryptoError = 'Library RC2 tidak tersedia. Instal phpseclib (composer require phpseclib/phpseclib:^3.0).';
+            return false;
+        }
+    } catch (Throwable $e) {
+        $msg = $e->getMessage();
+        if (stripos($msg, 'padding') !== false) {
+            $lastCryptoError = 'Password salah atau ciphertext rusak.';
+        } else {
+            $lastCryptoError = 'Gagal mendekripsi: ' . $msg;
+        }
         return false;
     }
 
-    // Simpan file terdekripsi
-    $result = file_put_contents($outputPath, $decrypted);
+    if ($decrypted === false || $decrypted === '' || (is_string($decrypted) && strlen($decrypted) === 0)) {
+        $lastCryptoError = 'Password salah atau ciphertext tidak valid.';
+        return false;
+    }
 
+
+    $magic = "RC2FILEv1";
+    if (strlen($decrypted) < strlen($magic) + 16) {
+        $lastCryptoError = "Payload dekripsi terlalu pendek.";
+        return false;
+    }
+    $gotMagic = substr($decrypted, 0, strlen($magic));
+    if ($gotMagic !== $magic) {
+        $lastCryptoError = "Signature tidak valid (kemungkinan password salah).";
+        return false;
+    }
+    $gotHmac = substr($decrypted, strlen($magic), 16);
+    $plain = substr($decrypted, strlen($magic) + 16);
+    $calcHmac = substr(hash_hmac('sha256', $plain, $key, true), 0, 16);
+    if (!hash_equals($gotHmac, $calcHmac)) {
+        $lastCryptoError = "HMAC tidak cocok (password salah atau data rusak).";
+        return false;
+    }
+
+    $result = file_put_contents($outputPath, $plain);
     return $result !== false;
 }
 
@@ -58,7 +103,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt'])) {
     } elseif (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
         $error = "Silakan pilih file terenkripsi yang valid!";
     } else {
-        $uploadDir = "../uploads/files/";
+        $uploadDir = "../uploads/files/file_decrypted/";
         if (!is_dir($uploadDir)) {
             mkdir($uploadDir, 0777, true);
         }
@@ -85,11 +130,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt'])) {
             if (move_uploaded_file($_FILES['file']['tmp_name'], $uploadFile)) {
                 if (decryptFile($uploadFile, $outputFile, $password)) {
                     $decrypted_file = $decryptedFileName;
-                    $success = "File berhasil didekripsi! Silakan download file terdekripsi.";
+                    $success = "File berhasil didekripsi!";
                     // Hapus file upload terenkripsi
                     unlink($uploadFile);
                 } else {
-                    $error = "Gagal mendekripsi file! Password salah atau file korup/tidak valid.";
+                    $error = "Gagal mendekripsi file! " . ($lastCryptoError ? $lastCryptoError : "Password salah atau file korup/tidak valid.");
                     unlink($uploadFile);
                 }
             } else {
@@ -129,7 +174,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt'])) {
         }
 
         .form-group input[type="file"],
-        .form-group input[type="password"] {
+        .form-group input[type="text"] {
             width: 100%;
             padding: 0.8rem;
             border: 1px solid #f3b7c0;
@@ -140,7 +185,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt'])) {
         }
 
         .form-group input[type="file"]:focus,
-        .form-group input[type="password"]:focus {
+        .form-group input[type="text"]:focus {
             border-color: #e29fa6;
         }
 
@@ -287,7 +332,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt'])) {
 
                     <div class="form-group">
                         <label for="password">Password Dekripsi:</label>
-                        <input type="password" name="password" id="password" placeholder="Masukkan password yang digunakan saat enkripsi" required>
+                        <input type="text" name="password" id="password" placeholder="Masukkan password yang digunakan saat enkripsi" required>
                         <p class="info-text">Password harus sama persis dengan password yang digunakan saat mengenkripsi file.</p>
                     </div>
 
@@ -300,17 +345,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt'])) {
                         <a href="../dashboard.php" class="btn btn-secondary">Batal</a>
                     </div>
                 </form>
-
-                <?php if (!empty($decrypted_file)): ?>
-                    <div class="result-group">
-                        <label>File Terdekripsi:</label>
-                        <div class="file-info">
-                            <strong>Nama File:</strong> <?php echo htmlspecialchars($decrypted_file); ?><br>
-                            <strong>File Terenkripsi:</strong> <?php echo htmlspecialchars($original_filename); ?>
-                        </div>
-                        <a href="../uploads/files/<?php echo htmlspecialchars($decrypted_file); ?>" download class="btn btn-download" style="margin-top: 1rem;">Download File Terdekripsi</a>
-                    </div>
-                <?php endif; ?>
             </div>
         </main>
     </div>
