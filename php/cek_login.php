@@ -20,7 +20,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $user = $result->fetch_assoc();
 
         // Verifikasi password
-        if ($pass) {
+        if ($pass === $user['password']) {
             // Sukses login, simpan username ke session
             $_SESSION['username'] = $user['username'];
             echo '<div class="alert alert-success">Login berhasil!</div>';
