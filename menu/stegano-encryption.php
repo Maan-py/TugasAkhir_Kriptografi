@@ -47,6 +47,14 @@ function hideMessageInImage($imagePath, $message, $outputPath)
     $width = imagesx($image);
     $height = imagesy($image);
 
+    // Pastikan gambar bertipe truecolor untuk pengeditan pixel akurat
+    if (!imageistruecolor($image)) {
+        $truecolor = imagecreatetruecolor($width, $height);
+        imagecopy($truecolor, $image, 0, 0, 0, 0, $width, $height);
+        imagedestroy($image);
+        $image = $truecolor;
+    }
+
     // Tambahkan delimiter di akhir pesan
     $message .= "|||END|||";
     $messageLength = strlen($message);
@@ -126,19 +134,8 @@ function hideMessageInImage($imagePath, $message, $outputPath)
         }
     }
 
-    // Simpan gambar
-    $result = false;
-    switch ($imageType) {
-        case IMAGETYPE_JPEG:
-            $result = imagejpeg($image, $outputPath, 90);
-            break;
-        case IMAGETYPE_PNG:
-            $result = imagepng($image, $outputPath);
-            break;
-        case IMAGETYPE_GIF:
-            $result = imagegif($image, $outputPath);
-            break;
-    }
+    // Simpan gambar SELALU sebagai PNG (lossless) agar LSB tidak rusak oleh kompresi lossy
+    $result = imagepng($image, $outputPath);
 
     imagedestroy($image);
     return $result;
@@ -153,7 +150,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
     } elseif (!isset($_FILES['image']) || $_FILES['image']['error'] !== UPLOAD_ERR_OK) {
         $error = "Silakan pilih gambar yang valid!";
     } else {
-        $uploadDir = "../uploads/stegano/";
+        $uploadDir = "../uploads/stegano/img_encrypted/";
         if (!is_dir($uploadDir)) {
             mkdir($uploadDir, 0777, true);
         }
@@ -378,15 +375,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
                         <a href="../dashboard.php" class="btn btn-secondary">Batal</a>
                     </div>
                 </form>
-
-                <?php if (!empty($output_image)): ?>
-                    <div class="result-group">
-                        <label>Gambar dengan Pesan Tersembunyi:</label>
-                        <img src="../uploads/stegano/<?php echo htmlspecialchars($output_image); ?>" alt="Stego Image" class="image-preview">
-                        <div class="file-info">File: <?php echo htmlspecialchars($output_image); ?></div>
-                        <a href="../uploads/stegano/<?php echo htmlspecialchars($output_image); ?>" download class="btn btn-download" style="margin-top: 1rem;">Download Gambar</a>
-                    </div>
-                <?php endif; ?>
             </div>
         </main>
     </div>

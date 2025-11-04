@@ -141,7 +141,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt'])) {
     if (!isset($_FILES['image']) || $_FILES['image']['error'] !== UPLOAD_ERR_OK) {
         $error = "Silakan pilih gambar yang valid!";
     } else {
-        $uploadDir = "../uploads/stegano/";
+        $uploadDir = "../uploads/stegano/img_decrypted/";
         if (!is_dir($uploadDir)) {
             mkdir($uploadDir, 0777, true);
         }
