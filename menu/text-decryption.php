@@ -51,6 +51,24 @@ function vigenere_decrypt($ciphertext, $key)
 // --- AKHIR FUNGSI VIGENERE ---
 
 
+// Helper: cek apakah string mayoritas printable (heuristik untuk deteksi kunci salah)
+function is_mostly_printable($text)
+{
+    if ($text === null) return false;
+    $len = strlen($text);
+    if ($len === 0) return false;
+    $printable = 0;
+    for ($i = 0; $i < $len; $i++) {
+        $ord = ord($text[$i]);
+        // printable ASCII range + tab, newline, carriage return
+        if (($ord >= 32 && $ord <= 126) || $ord === 9 || $ord === 10 || $ord === 13) {
+            $printable++;
+        }
+    }
+    return ($printable / $len) >= 0.85; // set ambang 85%
+}
+
+
 // Inisialisasi variabel
 $errors = [];
 $post_data = []; // Untuk menyimpan kunci yang di-submit
@@ -114,15 +132,33 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt_data']) && $cu
                 $rc4->setKey($kunci_rc4);
 
                 // Urutan dekripsi HARUS SAMA PERSIS dengan enkripsi
+                $dec_nama = $rc4->decrypt(hex2bin($current_data['enc_nama']));
+                $dec_telp = $rc4->decrypt(hex2bin($current_data['enc_telepon']));
+                $dec_tempat = $rc4->decrypt(hex2bin($current_data['enc_tempat_lahir']));
+                $dec_tanggal = $rc4->decrypt(hex2bin($current_data['enc_tanggal_lahir']));
+                $dec_alamat = $rc4->decrypt(hex2bin($current_data['enc_alamat']));
+
+                // Validasi sederhana untuk mendeteksi kunci salah (heuristik)
+                $name_ok = preg_match('/^[a-zA-Z\s\'.\-]+$/u', $dec_nama) === 1 && is_mostly_printable($dec_nama);
+                $tel_ok = preg_match('/^[0-9\+\-\s\(\)]+$/', $dec_telp) === 1 && is_mostly_printable($dec_telp);
+                $tmp_ok = preg_match('/[a-zA-Z]/u', $dec_tempat) === 1 && is_mostly_printable($dec_tempat);
+                $tgl_ok = preg_match('/^\d{4}-\d{2}-\d{2}$/', $dec_tanggal) === 1;
+                $alm_ok = strlen(trim($dec_alamat)) > 0 && is_mostly_printable($dec_alamat);
+
+                $ok_count = ($name_ok ? 1 : 0) + ($tel_ok ? 1 : 0) + ($tmp_ok ? 1 : 0) + ($tgl_ok ? 1 : 0) + ($alm_ok ? 1 : 0);
+                if ($ok_count <= 2) { // jika mayoritas tidak valid, anggap kunci salah
+                    throw new Exception('Kunci RC4 salah atau data korup.');
+                }
+
                 $decrypted_results['Data Diri'] = [
-                    'Nama' => $rc4->decrypt(hex2bin($current_data['enc_nama'])),
-                    'Telepon' => $rc4->decrypt(hex2bin($current_data['enc_telepon'])),
-                    'Tempat Lahir' => $rc4->decrypt(hex2bin($current_data['enc_tempat_lahir'])),
-                    'Tanggal Lahir' => $rc4->decrypt(hex2bin($current_data['enc_tanggal_lahir'])),
-                    'Alamat' => $rc4->decrypt(hex2bin($current_data['enc_alamat'])),
+                    'Nama' => $dec_nama,
+                    'Telepon' => $dec_telp,
+                    'Tempat Lahir' => $dec_tempat,
+                    'Tanggal Lahir' => $dec_tanggal,
+                    'Alamat' => $dec_alamat,
                 ];
             } catch (Exception $e) {
-                $errors[] = "Gagal dekripsi Data Diri (RC4): Kunci salah atau data korup.";
+                $errors[] = "Gagal dekripsi Data Diri (RC4): " . $e->getMessage();
             }
         } else {
             $errors[] = "Anda memasukkan kunci RC4, tapi data diri tidak ditemukan di set data ini.";
@@ -162,6 +198,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt_data']) && $cu
 
                 // 2. Dekripsi Lapis 2 (Vigenere)
                 $decrypted_plaintext = vigenere_decrypt($plain, $_POST['kunci_vigenere']);
+                // Heuristik validasi: hasil harus mayoritas printable
+                if (!is_mostly_printable($decrypted_plaintext)) {
+                    throw new Exception('Hasil tidak terbaca. Kemungkinan kunci salah.');
+                }
                 $decrypted_results['Pesan Bebas'] = $decrypted_plaintext;
             } catch (Exception $e) {
                 $errors[] = "Gagal dekripsi Pesan Bebas: " . $e->getMessage();
