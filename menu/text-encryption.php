@@ -10,7 +10,7 @@ if (!isset($_SESSION['username'])) {
 // Koneksi dan Library
 include "../php/koneksi.php";
 require_once __DIR__ . '/../vendor/autoload.php'; // Panggil phpseclib
-include_once "../php/simpan_textEnkrip.php"; // <-- MEMANGGIL FILE BARUMU
+include_once "../php/simpan_textEnkrip.php"; // Memanggil file 'Pelayan'
 
 // Gunakan Class Kriptografi
 use phpseclib3\Crypt\RC4;
@@ -37,12 +37,59 @@ function vigenere_encrypt($plaintext, $key)
             $ciphertext .= chr($encrypted_ord);
             $key_idx++;
         } else {
+            // Ini sekarang HANYA akan menangani spasi, sesuai validasi baru kita
             $ciphertext .= $char;
         }
     }
     return $ciphertext;
 }
 // --- AKHIR FUNGSI VIGENERE ---
+
+// Helper: hitung kunci RSA dari p, q, e
+function rsa_compute_keys($p_str, $q_str, $e_str)
+{
+    // (Fungsi RSA lengkap ada di sini, sama seperti sebelumnya)
+    $p = new BigInteger($p_str);
+    $q = new BigInteger($q_str);
+    $e = new BigInteger($e_str);
+    $one = new BigInteger(1);
+
+    $n = $p->multiply($q);
+    $phi = $p->subtract($one)->multiply($q->subtract($one));
+
+    if (!$e->gcd($phi)->equals($one)) {
+        throw new Exception('e tidak relatif prima dengan phi(n).');
+    }
+
+    $d = $e->modInverse($phi);
+
+    return [
+        'n' => $n,
+        'e' => $e,
+        'd' => $d,
+        'p' => $p,
+        'q' => $q
+    ];
+}
+
+// Helper: bangun komponen RSA (n, e, d) dari p, q, e
+function rsa_build_components($p_str, $q_str, $e_str)
+{
+    // (Fungsi RSA lengkap ada di sini, sama seperti sebelumnya)
+    $p = new BigInteger($p_str);
+    $q = new BigInteger($q_str);
+    $e = new BigInteger($e_str);
+    $one = new BigInteger(1);
+
+    $n = $p->multiply($q);
+    $phi = $p->subtract($one)->multiply($q->subtract($one));
+    if (!$e->gcd($phi)->equals($one)) {
+        throw new Exception('e tidak relatif prima dengan phi(n).');
+    }
+    $d = $e->modInverse($phi);
+
+    return ['n' => $n, 'e' => $e, 'd' => $d];
+}
 
 
 // Inisialisasi variabel
@@ -56,88 +103,118 @@ $username = $_SESSION['username']; // Ambil username dari session
 // Proses enkripsi
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
 
-    // Ambil semua data POST dan simpan
-    $post_data = $_POST;
+    // --- (ROMBAKAN) 1. AMBIL & BERSIHKAN SEMUA INPUT (TRIM) ---
+    // (Poin 1: Validasi Spasi)
+    // Ambil semua data POST dan trim (hilangkan spasi)
+    $data_label = isset($_POST['data_label']) ? trim($_POST['data_label']) : '';
+    $nama = isset($_POST['nama']) ? trim($_POST['nama']) : '';
+    $telepon = isset($_POST['telepon']) ? trim($_POST['telepon']) : '';
+    $tempat_lahir = isset($_POST['tempat_lahir']) ? trim($_POST['tempat_lahir']) : '';
+    $tanggal_lahir = isset($_POST['tanggal_lahir']) ? trim($_POST['tanggal_lahir']) : ''; // type date tidak perlu trim, tapi good practice
+    $alamat = isset($_POST['alamat']) ? trim($_POST['alamat']) : '';
+    $pesan_bebas = isset($_POST['pesan_bebas']) ? trim($_POST['pesan_bebas']) : '';
 
-    // --- 1. VALIDASI DATA ---
-    // (Semua logika validasi tetap di sini)
-    if (empty($_POST['data_label'])) {
-        $errors[] = "Label Data tidak boleh kosong. Ini untuk nama data Anda.";
+    $kunci_rc4 = isset($_POST['kunci_rc4_datadiri']) ? trim($_POST['kunci_rc4_datadiri']) : '';
+    $kunci_vig = isset($_POST['kunci_vigenere']) ? trim($_POST['kunci_vigenere']) : '';
+    $rsa_p = isset($_POST['rsa_p']) ? trim($_POST['rsa_p']) : '';
+    $rsa_q = isset($_POST['rsa_q']) ? trim($_POST['rsa_q']) : '';
+    $rsa_e = isset($_POST['rsa_e']) ? trim($_POST['rsa_e']) : '';
+
+    // Store data yang sudah bersih ke $post_data untuk re-populasi form
+    $post_data = [
+        'data_label' => $data_label,
+        'nama' => $nama,
+        'telepon' => $telepon,
+        'tempat_lahir' => $tempat_lahir,
+        'tanggal_lahir' => $tanggal_lahir,
+        'alamat' => $alamat,
+        'pesan_bebas' => $pesan_bebas,
+        'kunci_rc4_datadiri' => $kunci_rc4,
+        'kunci_vigenere' => $kunci_vig,
+        'rsa_p' => $rsa_p,
+        'rsa_q' => $rsa_q,
+        'rsa_e' => $rsa_e
+    ];
+
+    // --- (ROMBAKAN) 2. VALIDASI DATA ---
+
+    // A. Validasi Wajib
+    // (Poin 1) Cek Label Data (wajib & tidak boleh spasi)
+    if (empty($data_label)) {
+        $errors[] = "Label Data tidak boleh kosong. Ini wajib untuk nama data Anda.";
     }
-    if (empty($_POST['nama']) && empty($_POST['pesan_bebas'])) {
-        $errors[] = "Data Diri atau Pesan Bebas harus diisi untuk dienkripsi.";
-    }
-    // (Validasi kunci... validasi data diri... dll... sama seperti sebelumnya)
-    // ...
-    // ... (Validasi lengkap ada di sini) ...
-    // ...
-    if (!empty($_POST['nama']) && empty($_POST['kunci_rc4_datadiri'])) $errors[] = "Kunci RC4 Data Diri tidak boleh kosong jika Data Diri diisi.";
-    if (!empty($_POST['pesan_bebas'])) {
-        if (empty($_POST['kunci_vigenere'])) $errors[] = "Kunci Vigenere Pesan tidak boleh kosong jika Pesan Bebas diisi.";
-        if (empty($_POST['rsa_p']) || empty($_POST['rsa_q']) || empty($_POST['rsa_e'])) $errors[] = "Parameter RSA (p, q, e) tidak boleh kosong jika Pesan Bebas diisi.";
-    }
-    if (!empty($_POST['nama'])) {
-        if (!preg_match('/^[a-zA-Z\s\'.\-]+$/', $_POST['nama'])) $errors[] = "Nama hanya boleh berisi huruf, spasi, titik, dan apostrof.";
-        if (!preg_match('/^[0-9\+\-\s\(\)]+$/', $_POST['telepon'])) $errors[] = "Nomor Telepon hanya boleh berisi angka, spasi, dan simbol (+, -, (, )).";
-        if (empty($_POST['tempat_lahir'])) $errors[] = "Tempat Lahir tidak boleh kosong.";
-        if (!preg_match('/[a-zA-Z]/', $_POST['tempat_lahir'])) $errors[] = "Tempat Lahir harus berisi setidaknya satu huruf (tidak boleh hanya angka/simbol).";
-        if (empty($_POST['tanggal_lahir'])) $errors[] = "Tanggal Lahir tidak boleh kosong.";
-        if (empty($_POST['alamat'])) $errors[] = "Alamat tidak boleh kosong.";
+
+    // B. Cek apakah ada yang diisi
+    // Cek apakah field Data Diri (walau opsional) diisi SPASI SAJA
+    if (!empty($_POST['nama']) && empty($nama)) $errors[] = "Nama tidak boleh diisi spasi saja.";
+    if (!empty($_POST['telepon']) && empty($telepon)) $errors[] = "Nomor Telepon tidak boleh diisi spasi saja.";
+    if (!empty($_POST['tempat_lahir']) && empty($tempat_lahir)) $errors[] = "Tempat Lahir tidak boleh diisi spasi saja.";
+    if (!empty($_POST['alamat']) && empty($alamat)) $errors[] = "Alamat tidak boleh diisi spasi saja.";
+    
+    // Cek apakah field Pesan Bebas (opsional) diisi SPASI SAJA
+    if (!empty($_POST['pesan_bebas']) && empty($pesan_bebas)) $errors[] = "Catatan Rahasia tidak boleh diisi spasi saja.";
+
+
+    $isDataDiriFilled = !empty($nama) || !empty($telepon) || !empty($tempat_lahir) || !empty($tanggal_lahir) || !empty($alamat);
+    $isPesanBebasFilled = !empty($pesan_bebas);
+
+    if (!$isDataDiriFilled && !$isPesanBebasFilled) {
+        $errors[] = "Data Pribadi atau Catatan Rahasia harus diisi untuk dikunci.";
     }
 
+    // C. Validasi Kunci (jika data terkait diisi)
+    // Cek kunci yg diisi SPASI SAJA
+    if (!empty($_POST['kunci_rc4_datadiri']) && empty($kunci_rc4)) $errors[] = "Kunci Rahasia (Data Pribadi) tidak boleh diisi spasi saja.";
+    if (!empty($_POST['kunci_vigenere']) && empty($kunci_vig)) $errors[] = "Kunci Lapis 1 (Vigenere) tidak boleh diisi spasi saja.";
+    if (!empty($_POST['rsa_p']) && empty($rsa_p)) $errors[] = "Parameter RSA (p) tidak boleh diisi spasi saja.";
+    if (!empty($_POST['rsa_q']) && empty($rsa_q)) $errors[] = "Parameter RSA (q) tidak boleh diisi spasi saja.";
+    if (!empty($_POST['rsa_e']) && empty($rsa_e)) $errors[] = "Parameter RSA (e) tidak boleh diisi spasi saja.";
 
-    // Helper: hitung kunci RSA dari p, q, e
-    function rsa_compute_keys($p_str, $q_str, $e_str)
-    {
-        $p = new BigInteger($p_str);
-        $q = new BigInteger($q_str);
-        $e = new BigInteger($e_str);
-        $one = new BigInteger(1);
+    
+    if ($isDataDiriFilled && empty($kunci_rc4)) {
+        $errors[] = "Kunci Rahasia (Data Pribadi) tidak boleh kosong jika Data Pribadi diisi.";
+    }
+    
+    if ($isPesanBebasFilled) {
+        if (empty($kunci_vig)) $errors[] = "Kunci Lapis 1 (Vigenere) tidak boleh kosong jika Catatan Rahasia diisi.";
+        if (empty($rsa_p)) $errors[] = "Parameter RSA (p) tidak boleh kosong jika Catatan Rahasia diisi.";
+        if (empty($rsa_q)) $errors[] = "Parameter RSA (q) tidak boleh kosong jika Catatan Rahasia diisi.";
+        if (empty($rsa_e)) $errors[] = "Parameter RSA (e) tidak boleh kosong jika Catatan Rahasia diisi.";
+    }
 
-        $n = $p->multiply($q);
-        $phi = $p->subtract($one)->multiply($q->subtract($one));
-
-        if (!$e->gcd($phi)->equals($one)) {
-            throw new Exception('e tidak relatif prima dengan phi(n).');
+    // D. Validasi Format Field (Poin 4 & 5)
+    if ($isDataDiriFilled) {
+        if (!empty($nama) && !preg_match('/^[a-zA-Z\s\'.\-]+$/', $nama)) $errors[] = "Nama hanya boleh berisi huruf, spasi, titik, dan apostrof.";
+        
+        // (Poin 4) Validasi Telepon (hanya jika diisi)
+        if (!empty($telepon) && !preg_match('/^[0-9\+\-\s\(\)]+$/', $telepon)) {
+            $errors[] = "Nomor Telepon hanya boleh berisi angka, spasi, dan simbol (+, -, (, )).";
         }
-
-        $d = $e->modInverse($phi);
-
-        return [
-            'n' => $n,
-            'e' => $e,
-            'd' => $d,
-            'p' => $p,
-            'q' => $q
-        ];
+        
+        if (!empty($tempat_lahir) && !preg_match('/[a-zA-Z]/', $tempat_lahir)) $errors[] = "Tempat Lahir harus berisi setidaknya satu huruf (tidak boleh hanya angka/simbol).";
     }
 
-    // Helper: bangun komponen RSA (n, e, d) dari p, q, e
-    function rsa_build_components($p_str, $q_str, $e_str)
-    {
-        $p = new BigInteger($p_str);
-        $q = new BigInteger($q_str);
-        $e = new BigInteger($e_str);
-        $one = new BigInteger(1);
-
-        $n = $p->multiply($q);
-        $phi = $p->subtract($one)->multiply($q->subtract($one));
-        if (!$e->gcd($phi)->equals($one)) {
-            throw new Exception('e tidak relatif prima dengan phi(n).');
+    if ($isPesanBebasFilled) {
+        // (Poin 5) Validasi Vigenere Key (hanya huruf)
+        if (!empty($kunci_vig) && !preg_match('/^[a-zA-Z]+$/', $kunci_vig)) {
+            $errors[] = "Kunci Lapis 1 (Vigenere) hanya boleh berisi huruf (A-Z).";
         }
-        $d = $e->modInverse($phi);
-
-        return ['n' => $n, 'e' => $e, 'd' => $d];
+        // (Poin 5) Validasi Vigenere Pesan (hanya huruf dan spasi)
+        if (!empty($pesan_bebas) && !preg_match('/^[a-zA-Z\s]+$/', $pesan_bebas)) {
+            $errors[] = "Catatan Rahasia (Vigenere) hanya boleh berisi huruf (A-Z) dan spasi.";
+        }
     }
+    // --- AKHIR BLOK VALIDASI BARU ---
 
-    // --- 2. PROSES ENKRIPSI (Jika tidak ada error) ---
-    // (Logika enkripsi lengkap tetap di sini)
+
+    // --- 3. PROSES PENGUNCIAN (Jika tidak ada error) ---
     if (empty($errors)) {
 
         // Siapkan "Nampan" data untuk disimpan
         $data_to_save = [
             'username' => $username,
-            'data_label' => $_POST['data_label'],
+            // Gunakan variabel yg sudah di-trim
+            'data_label' => $data_label,
             'enc_nama' => null,
             'enc_telepon' => null,
             'enc_tempat_lahir' => null,
@@ -146,65 +223,68 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
             'enc_pesan_bebas' => null
         ];
 
-        // --- PROSES BAGIAN A: DATA DIRI (RC4) ---
-        if (!empty($_POST['nama'])) {
+        // --- PROSES BAGIAN A: DATA PRIBADI (RC4) ---
+        if ($isDataDiriFilled) { // Hanya proses jika field data diri ada yg diisi
             try {
                 $rc4_datadiri = new RC4();
-                $kunci_rc4 = $_POST['kunci_rc4_datadiri'];
+                // Gunakan variabel yg sudah di-trim
                 $rc4_datadiri->setKey($kunci_rc4);
 
                 $fields_to_encrypt = [
-                    'Nama' => $_POST['nama'],
-                    'Telepon' => $_POST['telepon'],
-                    'Tempat Lahir' => $_POST['tempat_lahir'],
-                    'Tanggal Lahir' => $_POST['tanggal_lahir'],
-                    'Alamat' => $_POST['alamat']
+                    // Gunakan variabel yg sudah di-trim
+                    'Nama' => $nama,
+                    'Telepon' => $telepon,
+                    'Tempat Lahir' => $tempat_lahir,
+                    'Tanggal Lahir' => $tanggal_lahir,
+                    'Alamat' => $alamat
                 ];
 
                 $encrypted_fields_hex = [];
                 foreach ($fields_to_encrypt as $key => $value) {
-                    $encrypted_raw = $rc4_datadiri->encrypt($value);
-                    $hex_value = bin2hex($encrypted_raw);
-                    $encrypted_fields_hex[$key] = $hex_value;
+                    // Hanya enkrip jika fieldnya tidak kosong
+                    if (!empty($value)) {
+                        $encrypted_raw = $rc4_datadiri->encrypt($value);
+                        $hex_value = bin2hex($encrypted_raw);
+                        $encrypted_fields_hex[$key] = $hex_value;
 
-                    // Masukkan ke "Nampan" data
-                    $db_col = 'enc_' . strtolower(str_replace(' ', '_', $key));
-                    if (array_key_exists($db_col, $data_to_save)) {
-                        $data_to_save[$db_col] = $hex_value;
+                        // Masukkan ke "Nampan" data
+                        $db_col = 'enc_' . strtolower(str_replace(' ', '_', $key));
+                        if (array_key_exists($db_col, $data_to_save)) {
+                            $data_to_save[$db_col] = $hex_value;
+                        }
+                    } else {
+                        // Jika fieldnya kosong, simpan null
+                        $encrypted_fields_hex[$key] = null;
                     }
                 }
 
                 $results['data_diri'] = [
-                    'title' => 'Data Diri (RC4)',
+                    'title' => 'Data Pribadi (Terkunci)',
                     'kunci' => $kunci_rc4,
-                    'ciphertexts' => $encrypted_fields_hex,
+                    'ciphertexts' => $encrypted_fields_hex, // Ini mungkin berisi null
                     'steps' => [
-                        "<b>1. Penyiapan Kunci:</b> Kunci RC4 (yang Anda masukkan) digunakan untuk KSA (Key-Scheduling Algorithm).",
-                        "<b>2. Enkripsi Field-by-Field:</b> Objek RC4 yang sama (dengan keystream berkelanjutan) digunakan untuk mengenkripsi 'Nama', lalu 'Telepon', 'Tempat Lahir', 'Tanggal Lahir', dan 'Alamat'.",
+                        "<b>1. Penyiapan Kunci:</b> Kunci Rahasia (yang Anda masukkan) digunakan untuk KSA (Key-Scheduling Algorithm).",
+                        "<b>2. Penguncian Field-by-Field:</b> Objek RC4 yang sama (dengan keystream berkelanjutan) digunakan untuk mengunci 'Nama', lalu 'Telepon', 'Tempat Lahir', 'Tanggal Lahir', dan 'Alamat' (jika diisi).",
                         "<b>3. Finalisasi:</b> Setiap hasil biner di-encode ke Heksadesimal."
                     ]
                 ];
             } catch (Exception $e) {
-                $errors[] = "Gagal enkripsi Data Diri: " . $e->getMessage();
+                $errors[] = "Gagal mengunci Data Pribadi: " . $e->getMessage();
             }
         }
 
-        // --- PROSES BAGIAN B: PESAN BEBAS (Vigenere + RSA) ---
-        if (!empty($_POST['pesan_bebas'])) {
+        // --- PROSES BAGIAN B: CATATAN RAHASIA (Vigenere + RSA) ---
+        if ($isPesanBebasFilled) { // Hanya proses jika pesan bebas diisi
             try {
-                $vigenere_result = vigenere_encrypt($_POST['pesan_bebas'], $_POST['kunci_vigenere']);
+                // Gunakan variabel yg sudah di-trim
+                $vigenere_result = vigenere_encrypt($pesan_bebas, $kunci_vig);
 
-                // Ambil p, q, e dari input dan hitung kunci RSA
-                if (empty($_POST['rsa_p']) || empty($_POST['rsa_q']) || empty($_POST['rsa_e'])) {
-                    throw new Exception('Input RSA (p, q, e) wajib diisi.');
-                }
-                // Bangun komponen RSA
-                $rsa = rsa_build_components($_POST['rsa_p'], $_POST['rsa_q'], $_POST['rsa_e']);
+                // Gunakan variabel yg sudah di-trim
+                $rsa = rsa_build_components($rsa_p, $rsa_q, $rsa_e);
 
-                // Enkripsi per blok menggunakan powMod (tanpa padding), output angka desimal per blok
+                // Enkripsi per blok (Logic sama seperti sebelumnya)
                 $nBits = strlen($rsa['n']->toBits());
                 $k = (int)ceil($nBits / 8);
-                // Tanpa padding: pastikan m < n → gunakan k-1, minimal 1
                 $mBlockMax = max(1, $k - 1);
                 $cipher_numbers = [];
                 for ($i = 0; $i < strlen($vigenere_result); $i += $mBlockMax) {
@@ -216,40 +296,38 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
                     $c = $m->powMod($rsa['e'], $rsa['n']);
                     $cipher_numbers[] = $c->toString();
                 }
+                // Ubah dari base64 ke spasi (sesuai kode aslimu)
                 $cipher_serialized = implode(' ', $cipher_numbers);
 
                 // Masukkan ke "Nampan" data
                 $data_to_save['enc_pesan_bebas'] = $cipher_serialized;
 
                 $results['pesan_bebas'] = [
-                    'title' => 'Pesan Bebas (Super Enkripsi: Vigenere + RSA)',
+                    'title' => 'Catatan Rahasia (Perlindungan Ganda: Vigenere + RSA)',
                     'ciphertext' => $cipher_serialized,
                     'steps' => [
-                        "<b>1. Input Plaintext:</b><br><span class='step-data'>" . htmlspecialchars($_POST['pesan_bebas']) . "</span>",
-                        "<b>2. Enkripsi Lapis 1 (Vigenere):</b> Plaintext dienkripsi dengan Vigenere (Kunci: " . htmlspecialchars($_POST['kunci_vigenere']) . ").<br><b>Hasil Vigenere:</b> <span class='step-data'>" . htmlspecialchars($vigenere_result) . "</span>",
+                        "<b>1. Input Catatan:</b><br><span class='step-data'>" . htmlspecialchars($pesan_bebas) . "</span>",
+                        "<b>2. Kunci Lapis 1 (Vigenere):</b> Catatan dikunci dengan Vigenere (Kunci: " . htmlspecialchars($kunci_vig) . ").<br><b>Hasil Vigenere:</b> <span class='step-data'>" . htmlspecialchars($vigenere_result) . "</span>",
                         "<b>3. Penyiapan Kunci RSA:</b> Hitung n = p*q, phi=(p-1)(q-1), verifikasi gcd(e, phi)=1, hitung d = e^{-1} mod phi.",
-                        "<b>4. Enkripsi Lapis 2 (RSA):</b> Hasil Vigenere dienkripsi per blok dengan RSA (tanpa padding).",
-                        "<b>5. Finalisasi:</b> Ciphertext diserialisasi ke Base64."
+                        "<b>4. Kunci Lapis 2 (RSA):</b> Hasil Vigenere dikunci lagi per blok dengan RSA (tanpa padding).",
+                        // Ganti Base64 ke Serialisasi Spasi
+                        "<b>5. Finalisasi:</b> Teks terkunci diserialisasi dengan pemisah spasi."
                     ]
                 ];
             } catch (Exception $e) {
-                $errors[] = "Gagal enkripsi Pesan Bebas: " . $e->getMessage();
+                $errors[] = "Gagal mengunci Catatan Rahasia: " . $e->getMessage();
             }
         }
 
-        // --- 3. PANGGIL "PELAYAN" UNTUK SIMPAN KE DB ---
-        // Hanya simpan jika TIDAK ADA error
-        // (Logika SQL sudah dipindah ke file 'simpan_textEnkrip.php')
+        // --- 4. PANGGIL "PELAYAN" UNTUK SIMPAN KE DB ---
         if (empty($errors) && !empty($results)) {
 
             // Panggil fungsi simpan dari file yang di-include
             $simpan_result = simpanDataEnkripsi($konek, $data_to_save);
 
             if ($simpan_result === true) {
-                // Jika "Pelayan" lapor sukses
-                $save_success = "Sukses! Data baru dengan label '" . htmlspecialchars($data_to_save['data_label']) . "' berhasil disimpan di database Anda.";
+                $save_success = "Sukses! Data baru dengan label '" . htmlspecialchars($data_to_save['data_label']) . "' berhasil disimpan di brankas Anda.";
             } else {
-                // Jika "Pelayan" lapor gagal, $simpan_result berisi pesan error
                 $save_error = $simpan_result;
             }
         }
@@ -262,17 +340,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Text Encryption (Simpan ke DB) - Kriptografi</title>
+    <!-- (Bahasa Awam) Title diubah -->
+    <title>Tulis Catatan Baru - Brankas Pribadi</title>
     <link rel="stylesheet" href="../css/dashboard.css">
-    <!-- Panggil CSS Eksternal -->
     <link rel="stylesheet" href="../css/textED.css">
 </head>
 
 <body>
     <div class="dashboard-container">
         <header class="dashboard-header">
+            <!-- (Bahasa Awam) Header diubah -->
             <div class="header-content">
-                <h1>Enkripsi & Simpan Data</h1>
+                <h1>Kunci & Simpan Catatan Baru</h1>
                 <div class="user-info">
                     <span class="welcome-text">User: <strong><?php echo htmlspecialchars($username); ?></strong></span>
                     <a href="../php/logout.php" class="logout-btn">Logout</a>
@@ -284,8 +363,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
             <div class="encryption-container">
                 <a href="../dashboard.php" class="back-link">← Kembali ke Dashboard</a>
 
-                <h2 style="color: #e29fa6; margin-bottom: 1rem;">Enkripsi & Simpan Teks ke Database</h2>
-                <p style="color: #666; margin-bottom: 2rem;">Masukkan data diri dan/atau pesan bebas. Data akan dienkripsi dan disimpan sebagai *data baru* di database Anda.</p>
+                <!-- (Bahasa Awam) Judul & Subjudul diubah -->
+                <h2 style="color: #e29fa6; margin-bottom: 1rem;">Tulis Catatan Baru ke Brankas Pribadi</h2>
+                <p style="color: #666; margin-bottom: 2rem;">Isi data yang ingin kamu amankan. Data akan dikunci (dienkripsi) dan disimpan sebagai *data baru* di brankasmu.</p>
 
                 <!-- Tampilkan Error Validasi -->
                 <?php if (!empty($errors)): ?>
@@ -301,6 +381,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
 
                 <!-- Tampilkan Status Simpan DB -->
                 <?php if ($save_success): ?>
+                    <!-- (Bahasa Awam) Pesan Sukses diubah -->
                     <div class="alert-db-success"><?php echo htmlspecialchars($save_success); ?></div>
                 <?php endif; ?>
 
@@ -308,14 +389,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
                     <div class="alert-db-error"><?php echo htmlspecialchars($save_error); ?></div>
                 <?php endif; ?>
 
-                <!-- Form HTML (Diperbarui: input RSA menggantikan kunci DES) -->
+                <!-- Form HTML (Diperbarui: value="" sekarang pakai $post_data yang sudah di-trim) -->
                 <form method="POST" action="">
 
                     <!-- INPUT BARU: DATA LABEL -->
                     <fieldset>
                         <legend>Informasi Data</legend>
                         <div class="form-group">
-                            <label for="data_label">Label Data (Wajib Diisi):</label>
+                            <label for="data_label">Label Catatan (Wajib Diisi):</label>
+                            <!-- (ROMBAKAN) value="" sekarang pakai $post_data -->
                             <input type="text" name="data_label" id="data_label" placeholder="Misal: Data Pribadi Cadangan, Catatan Meeting 1, dll." value="<?php echo htmlspecialchars($post_data['data_label'] ?? ''); ?>" required>
                             <p class="info-text">Beri nama data ini agar Anda mudah mengenalinya di halaman dekripsi.</p>
                         </div>
@@ -323,12 +405,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
 
                     <!-- GRUP DATA DIRI -->
                     <fieldset>
-                        <legend>Bagian A: Data Diri (RC4)</legend>
-                        <p class="info-text" style="margin-bottom: 1rem;">Data ini akan dienkripsi per-field menggunakan RC4 dan 1 kunci.</p>
+                        <!-- (Bahasa Awam) Judul & Subjudul diubah -->
+                        <legend>Bagian A: Data Pribadi (Kunci Simetris RC4)</legend>
+                        <p class="info-text" style="margin-bottom: 1rem;">Data ini akan dikunci per-field menggunakan RC4 dan 1 kunci.</p>
 
                         <div class="form-group">
-                            <label for="kunci_rc4_datadiri">Kunci RC4 Data Diri:</label>
-                            <input type="text" name="kunci_rc4_datadiri" id="kunci_rc4_datadiri" placeholder="Kunci rahasia untuk semua data diri" value="<?php echo htmlspecialchars($post_data['kunci_rc4_datadiri'] ?? ''); ?>">
+                            <label for="kunci_rc4_datadiri">Kunci Rahasia (Data Pribadi):</label>
+                            <input type="text" name="kunci_rc4_datadiri" id="kunci_rc4_datadiri" placeholder="Buat sebuah kunci untuk data pribadimu" value="<?php echo htmlspecialchars($post_data['kunci_rc4_datadiri'] ?? ''); ?>">
                         </div>
                         <div class="form-group">
                             <label for="nama">Nama:</label>
@@ -354,12 +437,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
 
                     <!-- GRUP PESAN BEBAS -->
                     <fieldset>
-                        <legend>Bagian B: Pesan Bebas (Vigenere + RSA)</legend>
-                        <p class="info-text" style="margin-bottom: 1rem;">Pesan ini akan dienkripsi 2 lapis (Vigenere lalu RSA). Masukkan p, q (bilangan prima besar) dan e sedemikian rupa sehingga gcd(e, (p-1)(q-1)) = 1.</p>
+                        <!-- (Bahasa Awam) Judul & Subjudul diubah -->
+                        <legend>Bagian B: Catatan Rahasia (Perlindungan Ganda Vigenere + RSA)</legend>
+                        <p class="info-text" style="margin-bottom: 1rem;">Catatan ini akan dikunci 2 lapis (Vigenere lalu RSA). Masukkan p, q (bilangan prima besar) dan e sedemikian rupa sehingga gcd(e, (p-1)(q-1)) = 1.</p>
 
                         <div class="form-group">
-                            <label for="kunci_vigenere">Kunci Pesan - Vigenere:</label>
-                            <input type="text" name="kunci_vigenere" id="kunci_vigenere" placeholder="Kunci untuk lapis 1 (Vigenere) Pesan Bebas" value="<?php echo htmlspecialchars($post_data['kunci_vigenere'] ?? ''); ?>">
+                            <label for="kunci_vigenere">Kunci Lapis 1 (Vigenere - Hanya Huruf):</label>
+                            <input type="text" name="kunci_vigenere" id="kunci_vigenere" placeholder="Masukkan kata kunci (hanya huruf, misal: RAHASIA)" value="<?php echo htmlspecialchars($post_data['kunci_vigenere'] ?? ''); ?>">
                         </div>
                         <div class="form-group">
                             <label for="rsa_p">RSA p (prima):</label>
@@ -374,14 +458,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
                             <input type="text" name="rsa_e" id="rsa_e" placeholder="Contoh: 65537" value="<?php echo htmlspecialchars($post_data['rsa_e'] ?? ''); ?>">
                         </div>
                         <div class="form-group">
-                            <label for="pesan_bebas">Pesan Bebas:</label>
-                            <textarea name="pesan_bebas" id="pesan_bebas" placeholder="Tulis pesan rahasia apa saja di sini..."><?php echo htmlspecialchars($post_data['pesan_bebas'] ?? ''); ?></textarea>
+                            <label for="pesan_bebas">Isi Catatan Rahasia (Hanya Huruf & Spasi):</label>
+                            <textarea name="pesan_bebas" id="pesan_bebas" placeholder="Tulis catatan rahasia apa saja di sini..."><?php echo htmlspecialchars($post_data['pesan_bebas'] ?? ''); ?></textarea>
                         </div>
                     </fieldset>
 
 
                     <div class="btn-group">
-                        <button type="submit" name="encrypt" class="btn btn-primary" style="background-color: #28a745; border-color: #28a745;">Enkripsi & Simpan Data Baru</button>
+                        <!-- (Bahasa Awam) Tombol diubah -->
+                        <button type="submit" name="encrypt" class="btn btn-primary" style="background-color: #28a745; border-color: #28a745;">Kunci & Simpan ke Brankas</button>
                         <a href="../dashboard.php" class="btn btn-secondary">Batal</a>
                     </div>
                 </form>
@@ -389,7 +474,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
                 <!-- HASIL ENKRIPSI (JIKA SUKSES) -->
                 <?php if (!empty($results)): ?>
                     <div class="result-group">
-                        <h2 style="color: #e29fa6; margin-bottom: 1rem;">Hasil Enkripsi</h2>
+                        <!-- (Bahasa Awam) Judul diubah -->
+                        <h2 style="color: #e29fa6; margin-bottom: 1rem;">Data Berhasil Dikunci</h2>
 
                         <!-- Hasil Bagian A: Data Diri -->
                         <?php if (isset($results['data_diri'])):
@@ -399,12 +485,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
                                 <legend><?php echo htmlspecialchars($res_dd['title']); ?></legend>
 
                                 <?php foreach ($res_dd['ciphertexts'] as $field_name => $ciphertext): ?>
-                                    <div class="result-box-label"><?php echo htmlspecialchars($field_name); ?>:</div>
-                                    <div class="result-box"><?php echo htmlspecialchars($ciphertext); ?></div>
+                                    <!-- Hanya tampilkan jika fieldnya dienkripsi (tidak null) -->
+                                    <?php if ($ciphertext !== null): ?> 
+                                        <div class="result-box-label"><?php echo htmlspecialchars($field_name); ?>:</div>
+                                        <div class="result-box"><?php echo htmlspecialchars($ciphertext); ?></div>
+                                    <?php endif; ?>
                                 <?php endforeach; ?>
 
                                 <div class="result-steps">
-                                    <h4>Langkah-langkah (Data Diri):</h4>
+                                    <!-- (Bahasa Awam) Judul diubah -->
+                                    <h4>Proses Penguncian (Data Pribadi):</h4>
                                     <?php
                                     if (isset($res_dd['steps']) && is_array($res_dd['steps'])) {
                                         foreach ($res_dd['steps'] as $step): echo "<p>$step</p>";
@@ -422,11 +512,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
                             <fieldset style="margin-top: 2rem;">
                                 <legend><?php echo htmlspecialchars($res_pb['title']); ?></legend>
 
-                                <div class="result-box-label">Ciphertext (Vigenere + RSA):</div>
+                                <!-- (Bahasa Awam) Label diubah -->
+                                <div class="result-box-label">Teks Terkunci (Vigenere + RSA):</div>
                                 <div class="result-box"><?php echo htmlspecialchars($res_pb['ciphertext']); ?></div>
 
                                 <div class="result-steps">
-                                    <h4>Langkah-langkah (Pesan Bebas):</h4>
+                                    <!-- (Bahasa Awam) Judul diubah -->
+                                    <h4>Proses Penguncian (Catatan Rahasia):</h4>
                                     <?php
                                     if (isset($res_pb['steps']) && is_array($res_pb['steps'])) {
                                         foreach ($res_pb['steps'] as $step): echo "<p>$step</p>";
@@ -445,3 +537,4 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
 </body>
 
 </html>
+
