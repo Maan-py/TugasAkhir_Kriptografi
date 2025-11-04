@@ -14,10 +14,11 @@ $username = $_SESSION['username'];
 
 // Gunakan Class Kriptografi
 use phpseclib3\Crypt\RC4;
-use phpseclib3\Crypt\DES;
+use phpseclib3\Math\BigInteger;
 
 // --- FUNGSI VIGENERE DECRYPT ---
-function vigenere_decrypt($ciphertext, $key) {
+function vigenere_decrypt($ciphertext, $key)
+{
     $key = strtoupper($key);
     $key_len = strlen($key);
     $key_idx = 0;
@@ -27,19 +28,19 @@ function vigenere_decrypt($ciphertext, $key) {
 
     for ($i = 0; $i < strlen($ciphertext); $i++) {
         $char = $ciphertext[$i];
-        
+
         if (ctype_alpha($char)) {
             $is_upper = ctype_upper($char);
             $char_ord = ord($char);
             $key_char = $key[$key_idx % $key_len];
             $key_ord = ord($key_char);
-            
+
             $base = $is_upper ? 65 : 97;
-            
+
             // Rumus Dekripsi Vigenere: (C - K + 26) mod 26
             $decrypted_ord = ($char_ord - $base - ($key_ord - 65) + 26) % 26 + $base;
             $plaintext .= chr($decrypted_ord);
-            
+
             $key_idx++;
         } else {
             $plaintext .= $char;
@@ -71,7 +72,6 @@ if ($view == 'list') {
     $stmt_list->execute();
     $data_list = $stmt_list->get_result()->fetch_all(MYSQLI_ASSOC);
     $stmt_list->close();
-
 } elseif ($view == 'detail') {
     // TAMPILAN 2: Ambil DETAIL 1 data
     if (!isset($_GET['id'])) {
@@ -79,7 +79,7 @@ if ($view == 'list') {
         $view = 'list'; // Kembalikan ke list jika ID tidak ada
     } else {
         $data_id = (int)$_GET['id'];
-        
+
         // Query keamanan: AMBIL HANYA data_id JIKA ITU MILIK user
         $stmt_detail = $konek->prepare("SELECT * FROM usersData WHERE data_id = ? AND username = ?");
         $stmt_detail->bind_param("is", $data_id, $username);
@@ -97,12 +97,12 @@ if ($view == 'list') {
 
 // --- PROSES DEKRIPSI (SAAT FORM DI-SUBMIT) ---
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt_data']) && $current_data) {
-    
+
     $post_data = $_POST; // Simpan kunci yang dimasukkan
 
     // Cek jika tidak ada kunci yang dimasukkan
-    if (empty($_POST['kunci_rc4_datadiri']) && (empty($_POST['kunci_vigenere']) || empty($_POST['kunci_des_pesan']))) {
-        $errors[] = "Anda harus memasukkan setidaknya satu set kunci (RC4 atau Vigenere+DES) untuk memulai dekripsi.";
+    if (empty($_POST['kunci_rc4_datadiri']) && (empty($_POST['kunci_vigenere']) || empty($_POST['rsa_p']) || empty($_POST['rsa_q']) || empty($_POST['rsa_e']))) {
+        $errors[] = "Anda harus memasukkan setidaknya satu set kunci (RC4 atau Vigenere+RSA) untuk memulai dekripsi.";
     }
 
     // --- PROSES BAGIAN A: DATA DIRI (RC4) ---
@@ -112,7 +112,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt_data']) && $cu
                 $rc4 = new RC4();
                 $kunci_rc4 = $_POST['kunci_rc4_datadiri'];
                 $rc4->setKey($kunci_rc4);
-                
+
                 // Urutan dekripsi HARUS SAMA PERSIS dengan enkripsi
                 $decrypted_results['Data Diri'] = [
                     'Nama' => $rc4->decrypt(hex2bin($current_data['enc_nama'])),
@@ -121,7 +121,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt_data']) && $cu
                     'Tanggal Lahir' => $rc4->decrypt(hex2bin($current_data['enc_tanggal_lahir'])),
                     'Alamat' => $rc4->decrypt(hex2bin($current_data['enc_alamat'])),
                 ];
-
             } catch (Exception $e) {
                 $errors[] = "Gagal dekripsi Data Diri (RC4): Kunci salah atau data korup.";
             }
@@ -130,41 +129,46 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt_data']) && $cu
         }
     }
 
-    // --- PROSES BAGIAN B: PESAN BEBAS (DES -> VIGENERE) ---
-    if (!empty($_POST['kunci_vigenere']) && !empty($_POST['kunci_des_pesan'])) {
-         if (!empty($current_data['enc_pesan_bebas'])) {
+    // --- PROSES BAGIAN B: PESAN BEBAS (RSA -> VIGENERE) ---
+    if (!empty($_POST['kunci_vigenere']) && !empty($_POST['rsa_p']) && !empty($_POST['rsa_q']) && !empty($_POST['rsa_e'])) {
+        if (!empty($current_data['enc_pesan_bebas'])) {
             try {
-                // 1. Decode Hex
-                $encrypted_raw_pesan = hex2bin($current_data['enc_pesan_bebas']);
-                
-                // 2. Dekripsi Lapis 1 (DES)
-                $des = new DES('cbc');
-                $kunci_des = $_POST['kunci_des_pesan'];
-                
-                // Turunkan Kunci 8-byte dan IV 8-byte (HARUS SAMA DENGAN ENKRIPSI)
-                $key_hash = hash('md5', $kunci_des, true); // 16 bytes
-                $des_key_8byte = substr($key_hash, 0, 8);
-                $des_iv_8byte = substr($key_hash, 8, 8);
+                // 1. Parse deretan angka desimal yang dipisah spasi
+                $cipher_text = trim($current_data['enc_pesan_bebas']);
+                if ($cipher_text === '') {
+                    throw new Exception('Ciphertext kosong.');
+                }
+                $cipher_tokens = preg_split('/\s+/', $cipher_text);
 
-                $des->setKey($des_key_8byte);
-                $des->setIV($des_iv_8byte);
-                
-                $vigenere_result = $des->decrypt($encrypted_raw_pesan);
+                $p = new BigInteger($_POST['rsa_p']);
+                $q = new BigInteger($_POST['rsa_q']);
+                $e = new BigInteger($_POST['rsa_e']);
+                $one = new BigInteger(1);
+                $n = $p->multiply($q);
+                $phi = $p->subtract($one)->multiply($q->subtract($one));
+                if (!$e->gcd($phi)->equals($one)) {
+                    throw new Exception('e tidak relatif prima dengan phi(n).');
+                }
+                $d = $e->modInverse($phi);
 
-                if ($vigenere_result === false) {
-                    $errors[] = "Gagal mendekripsi Pesan Bebas (Lapis DES): Kunci DES salah atau data korup.";
-                } else {
-                    // 3. Dekripsi Lapis 2 (Vigenere)
-                    $decrypted_plaintext = vigenere_decrypt($vigenere_result, $_POST['kunci_vigenere']);
-                    $decrypted_results['Pesan Bebas'] = $decrypted_plaintext;
+                $plain = '';
+                foreach ($cipher_tokens as $tok) {
+                    $tok = trim($tok);
+                    if ($tok === '') continue;
+                    $c = new BigInteger($tok);
+                    $m = $c->powMod($d, $n);
+                    $plain .= $m->toBytes();
                 }
 
+                // 2. Dekripsi Lapis 2 (Vigenere)
+                $decrypted_plaintext = vigenere_decrypt($plain, $_POST['kunci_vigenere']);
+                $decrypted_results['Pesan Bebas'] = $decrypted_plaintext;
             } catch (Exception $e) {
                 $errors[] = "Gagal dekripsi Pesan Bebas: " . $e->getMessage();
             }
-         } else {
-             $errors[] = "Anda memasukkan kunci Vigenere+DES, tapi pesan bebas tidak ditemukan di set data ini.";
-         }
+        } else {
+            $errors[] = "Anda memasukkan kunci Vigenere+RSA, tapi pesan bebas tidak ditemukan di set data ini.";
+        }
     }
 }
 ?>
@@ -194,7 +198,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt_data']) && $cu
 
         <main class="dashboard-main">
             <div class="encryption-container">
-                
+
                 <!-- Tampilkan link "Kembali" yang berbeda tergantung view -->
                 <?php if ($view == 'list'): ?>
                     <a href="../dashboard.php" class="back-link">← Kembali ke Dashboard</a>
@@ -204,7 +208,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt_data']) && $cu
 
 
                 <h2 style="color: #e29fa6; margin-bottom: 1rem;">Dekripsi Data dari Database</h2>
-                
+
                 <?php if (!empty($errors)): ?>
                     <div class="alert-error">
                         <strong>Terjadi Kesalahan:</strong>
@@ -215,12 +219,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt_data']) && $cu
                         </ul>
                     </div>
                 <?php endif; ?>
-                
+
                 <!-- ======================================================= -->
                 <!-- ============ TAMPILAN 1: DAFTAR DATA (LIST) ============ -->
                 <!-- ======================================================= -->
                 <?php if ($view == 'list'): ?>
-                
+
                     <p style="color: #666; margin-bottom: 2rem;">Berikut adalah daftar data terenkripsi yang Anda simpan di database. Pilih data untuk dilihat rinciannya dan didekripsi.</p>
 
                     <?php if (empty($data_list)): ?>
@@ -239,32 +243,32 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt_data']) && $cu
                             </thead>
                             <tbody>
                                 <?php foreach ($data_list as $index => $item): ?>
-                                <tr>
-                                    <td><?php echo $index + 1; ?></td>
-                                    <td><?php echo htmlspecialchars($item['data_label']); ?></td>
-                                    <td><?php echo htmlspecialchars(date('d F Y H:i', strtotime($item['created_at']))); ?></td>
-                                    <td>
-                                        <a href="text-decryption.php?view=detail&id=<?php echo $item['data_id']; ?>" class="btn-detail">Lihat Detail & Dekripsi</a>
-                                    </td>
-                                </tr>
+                                    <tr>
+                                        <td><?php echo $index + 1; ?></td>
+                                        <td><?php echo htmlspecialchars($item['data_label']); ?></td>
+                                        <td><?php echo htmlspecialchars(date('d F Y H:i', strtotime($item['created_at']))); ?></td>
+                                        <td>
+                                            <a href="text-decryption.php?view=detail&id=<?php echo $item['data_id']; ?>" class="btn-detail">Lihat Detail & Dekripsi</a>
+                                        </td>
+                                    </tr>
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
                     <?php endif; ?>
-                
-                
-                <!-- ======================================================= -->
-                <!-- ============ TAMPILAN 2: DETAIL & DEKRIPSI ============ -->
-                <!-- ======================================================= -->
+
+
+                    <!-- ======================================================= -->
+                    <!-- ============ TAMPILAN 2: DETAIL & DEKRIPSI ============ -->
+                    <!-- ======================================================= -->
                 <?php elseif ($view == 'detail' && $current_data): ?>
-                
+
                     <p style="color: #666; margin-bottom: 2rem;">Anda sedang melihat data: <strong>"<?php echo htmlspecialchars($current_data['data_label']); ?>"</strong> (disimpan pada <?php echo htmlspecialchars(date('d F Y', strtotime($current_data['created_at']))); ?>).</p>
 
                     <!-- RINCIAN CIPHERTEXT (YANG KAMU MINTA) -->
                     <div class="cipher-detail-box">
                         <h3>Rincian Ciphertext</h3>
-                        
-                        <?php if(!empty($current_data['enc_nama'])): ?>
+
+                        <?php if (!empty($current_data['enc_nama'])): ?>
                             <div class="cipher-field">
                                 <strong>Cipher - Nama:</strong>
                                 <span><?php echo htmlspecialchars($current_data['enc_nama']); ?></span>
@@ -286,29 +290,29 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt_data']) && $cu
                                 <span><?php echo htmlspecialchars($current_data['enc_alamat']); ?></span>
                             </div>
                         <?php else: ?>
-                             <div class="alert-info" style="margin-bottom: 1rem;">Tidak ada Data Diri tersimpan di set data ini.</div>
+                            <div class="alert-info" style="margin-bottom: 1rem;">Tidak ada Data Diri tersimpan di set data ini.</div>
                         <?php endif; ?>
 
                         <hr style="border:0; border-top: 1px solid #f3b7c0; margin: 1.5rem 0;">
 
-                        <?php if(!empty($current_data['enc_pesan_bebas'])): ?>
-                             <div class="cipher-field">
-                                <strong>Cipher - Pesan Bebas (Vigenere+DES):</strong>
+                        <?php if (!empty($current_data['enc_pesan_bebas'])): ?>
+                            <div class="cipher-field">
+                                <strong>Cipher - Pesan Bebas (Vigenere+RSA):</strong>
                                 <span><?php echo htmlspecialchars($current_data['enc_pesan_bebas']); ?></span>
                             </div>
                         <?php else: ?>
-                             <div class="alert-info" style="margin-bottom: 1rem;">Tidak ada Pesan Bebas tersimpan di set data ini.</div>
+                            <div class="alert-info" style="margin-bottom: 1rem;">Tidak ada Pesan Bebas tersimpan di set data ini.</div>
                         <?php endif; ?>
                     </div>
 
                     <!-- FORM KUNCI DEKRIPSI -->
                     <form method="POST" action="text-decryption.php?view=detail&id=<?php echo $data_id; ?>">
-                        
+
                         <!-- GRUP KUNCI DATA DIRI -->
                         <fieldset>
                             <legend>Bagian A: Dekripsi Data Diri (RC4)</legend>
                             <p class="info-text" style="margin-bottom: 1rem;">Masukkan kunci RC4 untuk mendekripsi Data Diri di atas.</p>
-                            
+
                             <div class="form-group">
                                 <label for="kunci_rc4_datadiri">Kunci RC4 Data Diri:</label>
                                 <input type="text" name="kunci_rc4_datadiri" id="kunci_rc4_datadiri" placeholder="Kunci rahasia untuk semua data diri" value="<?php echo htmlspecialchars($post_data['kunci_rc4_datadiri'] ?? ''); ?>">
@@ -317,16 +321,24 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt_data']) && $cu
 
                         <!-- GRUP KUNCI PESAN BEBAS -->
                         <fieldset>
-                            <legend>Bagian B: Dekripsi Pesan Bebas (Vigenere + DES)</legend>
-                            <p class="info-text" style="margin-bottom: 1rem;">Masukkan 2 kunci untuk mendekripsi Pesan Bebas di atas.</p>
-                            
+                            <legend>Bagian B: Dekripsi Pesan Bebas (Vigenere + RSA)</legend>
+                            <p class="info-text" style="margin-bottom: 1rem;">Masukkan kunci Vigenere dan parameter RSA (p, q, e) yang sama dengan saat enkripsi.</p>
+
                             <div class="form-group">
                                 <label for="kunci_vigenere">Kunci Pesan - Vigenere:</label>
                                 <input type="text" name="kunci_vigenere" id="kunci_vigenere" placeholder="Kunci untuk lapis 1 (Vigenere) Pesan Bebas" value="<?php echo htmlspecialchars($post_data['kunci_vigenere'] ?? ''); ?>">
                             </div>
                             <div class="form-group">
-                                <label for="kunci_des_pesan">Kunci Pesan - DES:</label>
-                                <input type="text" name="kunci_des_pesan" id="kunci_des_pesan" placeholder="Kunci untuk lapis 2 (DES) Pesan Bebas" value="<?php echo htmlspecialchars($post_data['kunci_des_pesan'] ?? ''); ?>">
+                                <label for="rsa_p">RSA p (prima):</label>
+                                <input type="text" name="rsa_p" id="rsa_p" placeholder="Bilangan prima yang dipakai saat enkripsi" value="<?php echo htmlspecialchars($post_data['rsa_p'] ?? ''); ?>">
+                            </div>
+                            <div class="form-group">
+                                <label for="rsa_q">RSA q (prima):</label>
+                                <input type="text" name="rsa_q" id="rsa_q" placeholder="Bilangan prima yang dipakai saat enkripsi" value="<?php echo htmlspecialchars($post_data['rsa_q'] ?? ''); ?>">
+                            </div>
+                            <div class="form-group">
+                                <label for="rsa_e">RSA e (eksponen publik):</label>
+                                <input type="text" name="rsa_e" id="rsa_e" placeholder="Contoh: 65537" value="<?php echo htmlspecialchars($post_data['rsa_e'] ?? ''); ?>">
                             </div>
                         </fieldset>
 
@@ -339,9 +351,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt_data']) && $cu
                     <?php if (!empty($decrypted_results)): ?>
                         <div class="result-group">
                             <h2 style="color: #e29fa6; margin-bottom: 1rem;">Hasil Dekripsi</h2>
-                            
+
                             <!-- Hasil Bagian A: Data Diri -->
-                            <?php if (isset($decrypted_results['Data Diri'])): 
+                            <?php if (isset($decrypted_results['Data Diri'])):
                                 $res_dd = $decrypted_results['Data Diri'];
                             ?>
                                 <fieldset>
@@ -357,13 +369,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt_data']) && $cu
                             <?php endif; ?>
 
                             <!-- Hasil Bagian B: Pesan Bebas -->
-                            <?php if (isset($decrypted_results['Pesan Bebas'])): 
+                            <?php if (isset($decrypted_results['Pesan Bebas'])):
                                 $res_pb = $decrypted_results['Pesan Bebas'];
                             ?>
-                                 <fieldset style="margin-top: 2rem;">
-                                    <legend>Pesan Bebas (Vigenere + DES)</legend>
+                                <fieldset style="margin-top: 2rem;">
+                                    <legend>Pesan Bebas (Vigenere + RSA)</legend>
                                     <div class="result-box">
-                                        <?php echo nl2br(htmlspecialchars($res_pb)); // nl2br agar baris baru di plaintext tampil ?>
+                                        <?php echo nl2br(htmlspecialchars($res_pb)); // nl2br agar baris baru di plaintext tampil 
+                                        ?>
                                     </div>
                                 </fieldset>
                             <?php endif; ?>
@@ -371,10 +384,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt_data']) && $cu
                     <?php endif; ?>
 
                 <?php endif; ?>
-                    
+
             </div>
         </main>
     </div>
 </body>
-</html>
 
+</html>
