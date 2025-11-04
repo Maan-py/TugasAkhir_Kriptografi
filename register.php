@@ -122,7 +122,7 @@
       <div class="mb-3">
         <p>Have an account? Login, <a href="index.php"> here.</a></p>
       </div>
-      <input type="submit" value="LOGIN" />
+      <input type="submit" value="REGISTER" />
     </form>
   </div>
 </body>

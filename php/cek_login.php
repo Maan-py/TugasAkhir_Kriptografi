@@ -34,7 +34,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
     } else {
         // Username tidak ditemukan
-        echo json_encode(['status' => 'error', 'message' => 'Username tidak ditemukan']);
+        echo '<div class="alert alert-danger">Username atau password salah!</div>';
+        header("Location: ../index.php?pesan=gagal_login");
     }
 
     // Tutup statement dan konek

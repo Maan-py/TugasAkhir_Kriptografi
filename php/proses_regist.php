@@ -39,7 +39,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // Eksekusi statement dan periksa kesalahan
     if ($stmtUser->execute()) {
         echo '<div class="alert alert-success">Registrasi berhasil!</div>';
-        header("Location: ../login.php?pesan=sukses_regist");
+        header("Location: ../index.php?pesan=sukses_regist");
         // Tambahkan kategori default untuk pengguna baru
         // $sqlCategory = "
         //     INSERT INTO categories (name, is_default, username)
