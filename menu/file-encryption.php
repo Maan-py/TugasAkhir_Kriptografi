@@ -20,7 +20,7 @@ $lastCryptoError = ""; // diisi jika ada error kripto
 function encryptFile($filePath, $outputPath, $password)
 {
     global $lastCryptoError;
-    
+
     $autoload = __DIR__ . '/../vendor/autoload.php';
     if (file_exists($autoload)) {
         require_once $autoload;
@@ -308,9 +308,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
                         <p class="info-text">Gunakan password yang kuat dan simpan dengan aman. Anda akan membutuhkan password ini untuk dekripsi!</p>
                     </div>
 
-                    <div class="password-warning">
+                    <!-- <div class="password-warning">
                         <strong>⚠️ Peringatan Penting:</strong> Simpan password Anda dengan baik! Jika password hilang, file tidak dapat didekripsi kembali. Sistem tidak menyimpan password Anda.
-                    </div>
+                    </div> -->
 
                     <div class="btn-group">
                         <button type="submit" name="encrypt" class="btn btn-primary">Enkripsi File</button>
