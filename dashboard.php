@@ -98,9 +98,9 @@ function time_ago($timestamp)
 
 
                 <div class="header-right">
-                    <button id="toggle-theme" title="Ganti Tema">
+                    <!-- <button id="toggle-theme" title="Ganti Tema">
                         <i class="fa-solid fa-moon"></i>
-                    </button>
+                    </button> -->
                     <!-- 4. Tombol Aksi Cepat (Quick Action) -->
                     <!-- TOMBOL DIHAPUS SESUAI PERMINTAAN -->
                     <a href="php/logout.php" class="logout-btn">Logout</a>
