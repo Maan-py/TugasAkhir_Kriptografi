@@ -190,11 +190,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt'])) {
                     $extracted_message = $out;
                     $uploaded_image = basename($uploadFile);
                     $success = "Pesan berhasil diekstrak dari metadata JPEG!";
+                    // Tampilkan metadata hanya jika dekripsi/ekstraksi berhasil
+                    $all_metadata_html = collectAllJpegMetadataHtml($uploadFile);
                 } else {
                     $error = $out ?: "Tidak ada pesan yang ditemukan atau format tidak valid.";
+                    // Jangan tampilkan metadata ketika kunci salah/gagal
+                    $all_metadata_html = "";
                 }
-
-                $all_metadata_html = collectAllJpegMetadataHtml($uploadFile);
 
                 unlink($uploadFile);
             } else {
@@ -331,6 +333,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt'])) {
             margin-top: 2rem;
             padding-top: 2rem;
             border-top: 2px solid #f3b7c0;
+            display: flex;
+            flex-direction: column;
         }
 
         .result-box {
@@ -394,7 +398,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt'])) {
                 <?php if (!empty($extracted_message)): ?>
                     <div class="result-group">
                         <label>Pesan yang Diekstrak:</label>
-                        <div class="result-box" id="extracted-result"><?php echo htmlspecialchars($extracted_message); ?></div>
+                        <textarea style="resize: none;" class="result-box" id="extracted-result" readonly><?php echo $extracted_message; ?></textarea>
                         <button type="button" class="btn btn-copy" onclick="copyToClipboard()" style="margin-top: 1rem;">Salin Pesan</button>
                     </div>
                 <?php endif; ?>
@@ -414,7 +418,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt'])) {
     <script>
         function copyToClipboard() {
             const resultBox = document.getElementById('extracted-result');
-            const text = resultBox.textContent;
+            const text = resultBox.tagName === 'TEXTAREA' ? resultBox.value : resultBox.textContent;
 
             navigator.clipboard.writeText(text).then(function() {
                 alert('Pesan berhasil disalin ke clipboard!');
