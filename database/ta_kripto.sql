@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Nov 03, 2025 at 04:54 PM
+-- Generation Time: Nov 05, 2025 at 02:41 PM
 -- Server version: 10.4.28-MariaDB
 -- PHP Version: 8.2.4
 
@@ -38,7 +38,26 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `username`, `password`) VALUES
-(3, '123', '202cb962ac59075b964b07152d234b70');
+(1, '123', '202cb962ac59075b964b07152d234b70');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `userscatatan`
+--
+
+CREATE TABLE `userscatatan` (
+  `data_id` int(11) NOT NULL,
+  `username` varchar(255) NOT NULL,
+  `enc_pesan_bebas` text DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `userscatatan`
+--
+
+INSERT INTO `userscatatan` (`data_id`, `username`, `enc_pesan_bebas`) VALUES
+(1, '123', '118 59 121 59 50 118 49');
 
 -- --------------------------------------------------------
 
@@ -55,7 +74,6 @@ CREATE TABLE `usersdata` (
   `enc_tempat_lahir` text DEFAULT NULL,
   `enc_tanggal_lahir` text DEFAULT NULL,
   `enc_alamat` text DEFAULT NULL,
-  `enc_pesan_bebas` text DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -63,10 +81,8 @@ CREATE TABLE `usersdata` (
 -- Dumping data for table `usersdata`
 --
 
-INSERT INTO `usersdata` (`data_id`, `username`, `data_label`, `enc_nama`, `enc_telepon`, `enc_tempat_lahir`, `enc_tanggal_lahir`, `enc_alamat`, `enc_pesan_bebas`, `created_at`) VALUES
-(2, '123', 'data rara', '11489f9f', '5311dccc9953abb97f21', '2866b9bf8a2cdbcb014bd1', '5119ddca8756aea27a29', '134c9f8bc709fffc', '0bf91c4fa633e6927b9c4b29718351f1', '2025-11-03 15:27:12'),
-(3, '123', 'data luqmaan', '26edf0b9f10bcc', '7aa0b0e6a35e9794e4ef', '01d7d595b021e7e69a85cb', '78a8b1e0bd5b928fe1e7', '29f7efb7f11e', 'afdfaaf256111d91', '2025-11-03 15:31:16'),
-(4, '123', 'data raraa', '0d48988ccb0f', '5311dccc9953abb97f21a13f', '2866b9bf8a2cdbcb014bd1', '5119ddca8756aea27a29', '134c9f8bc709fffc', '0eb1ed0d31a48dc1', '2025-11-03 15:32:24');
+INSERT INTO `usersdata` (`data_id`, `username`, `data_label`, `enc_nama`, `enc_telepon`, `enc_tempat_lahir`, `enc_tanggal_lahir`, `enc_alamat`, `created_at`) VALUES
+(1, '123', 'ahqbsqhsw', '11489f9f', '5311dccc9953abb97f21', NULL, NULL, '134c9f8bc709fffc', '2025-11-05 12:51:14');
 
 --
 -- Indexes for dumped tables
@@ -76,13 +92,22 @@ INSERT INTO `usersdata` (`data_id`, `username`, `data_label`, `enc_nama`, `enc_t
 -- Indexes for table `users`
 --
 ALTER TABLE `users`
-  ADD PRIMARY KEY (`id`);
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `username` (`username`);
+
+--
+-- Indexes for table `userscatatan`
+--
+ALTER TABLE `userscatatan`
+  ADD PRIMARY KEY (`data_id`),
+  ADD KEY `username` (`username`);
 
 --
 -- Indexes for table `usersdata`
 --
 ALTER TABLE `usersdata`
-  ADD PRIMARY KEY (`data_id`);
+  ADD PRIMARY KEY (`data_id`),
+  ADD KEY `username` (`username`);
 
 --
 -- AUTO_INCREMENT for dumped tables
@@ -92,13 +117,30 @@ ALTER TABLE `usersdata`
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `usersdata`
 --
 ALTER TABLE `usersdata`
-  MODIFY `data_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `data_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+
+--
+-- Constraints for dumped tables
+--
+
+--
+-- Constraints for table `userscatatan`
+--
+ALTER TABLE `userscatatan`
+  ADD CONSTRAINT `userscatatan_ibfk_1` FOREIGN KEY (`data_id`) REFERENCES `usersdata` (`data_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `userscatatan_ibfk_2` FOREIGN KEY (`username`) REFERENCES `users` (`username`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+--
+-- Constraints for table `usersdata`
+--
+ALTER TABLE `usersdata`
+  ADD CONSTRAINT `usersdata_ibfk_1` FOREIGN KEY (`username`) REFERENCES `users` (`username`) ON DELETE CASCADE ON UPDATE CASCADE;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

@@ -1,67 +1,75 @@
-<?php
-session_start();
+<?php 
+session_start(); 
 include "koneksi.php";
 
-// Nonaktifkan mode exception untuk mysqli (hanya alert saja muncul)
-mysqli_report(MYSQLI_REPORT_OFF); // Menonaktifkan laporan error dalam bentuk exception
+mysqli_report(MYSQLI_REPORT_OFF);
 
-// Mengecek apakah form di-submit
+function setErrorAndRedirect($pesan_error) {
+    $_SESSION['error_register'] = $pesan_error;
+    header("Location: ../register.php");
+    exit(); 
+}
+
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    // Mengambil data dari formulir
-    $username = htmlspecialchars($_POST['username']);
-    $password = htmlspecialchars($_POST['password']);
-    
-    // --- MODIFIKASI 1: Ambil data konfirmasi password ---
-    $konfirmasi_password = htmlspecialchars($_POST['konfirmasi_password']);
+    $username_raw = isset($_POST['username']) ? trim($_POST['username']) : '';
+    $password_raw = isset($_POST['password']) ? trim($_POST['password']) : '';
+    $konfirmasi_password_raw = isset($_POST['konfirmasi_password']) ? trim($_POST['konfirmasi_password']) : '';
 
-    // --- Validasi panjang username DIHAPUS ---
-    // if (strlen($username) < 6 || strlen($username) > 12) {
-    //     echo '<div class="alert alert-danger">Username harus antara 6 dan 12 karakter.</div>';
-    //     exit; // Hentikan eksekusi script jika ada error
-    // }
-
-    // --- MODIFIKASI 2: Tambahkan validasi kesamaan password (Tetap ada) ---
-    if ($password !== $konfirmasi_password) {
-        echo '<div class="alert alert-danger">Password dan Konfirmasi Password tidak cocok!</div>';
-        exit; // Hentikan eksekusi script jika password tidak sama
+    if (empty($username_raw)) {
+        setErrorAndRedirect("Username tidak boleh kosong.");
     }
-    // --- Akhir Modifikasi ---
+    if (empty($password_raw)) {
+        setErrorAndRedirect("Password tidak boleh kosong.");
+    }
+    if (empty($konfirmasi_password_raw)) {
+        setErrorAndRedirect("Konfirmasi Password tidak boleh kosong.");
+    }
 
+    if (strlen($username_raw) < 4) {
+        setErrorAndRedirect("Username minimal harus 4 karakter.");
+    }
+    if (strlen($username_raw) > 256) {
+        setErrorAndRedirect("Username maksimal 256 karakter.");
+    }
 
-    // Hash password (Hanya dijalankan SETELAH password terkonfirmasi cocok)
+    if (strlen($password_raw) < 8) {
+        setErrorAndRedirect("Password minimal harus 8 karakter.");
+    }
+    if (strlen($password_raw) > 256) {
+        setErrorAndRedirect("Password maksimal 256 karakter.");
+    }
+
+    if ($password_raw !== $konfirmasi_password_raw) {
+        setErrorAndRedirect("Password dan Konfirmasi Password tidak cocok!");
+    }
+
+    $username = htmlspecialchars($username_raw);
+    $password = htmlspecialchars($password_raw);
     $hashedPassword = md5($password);
 
-    // Menyimpan data pengguna ke database
     $sqlUser = "INSERT INTO users (username, password) VALUES (?, ?)";
-    $stmtUser = $konek->prepare($sqlUser); // Tetap pakai $konek
+    $stmtUser = $konek->prepare($sqlUser);
+    
+    if (!$stmtUser) {
+        setErrorAndRedirect("Terjadi kesalahan saat menyiapkan query: " . $konek->error);
+    }
+
     $stmtUser->bind_param("ss", $username, $hashedPassword);
 
-    // Eksekusi statement dan periksa kesalahan
     if ($stmtUser->execute()) {
-        echo '<div class="alert alert-success">Registrasi berhasil!</div>';
-        header("Location: ../index.php?pesan=sukses_regist");
-        // Tambahkan kategori default untuk pengguna baru
-        // $sqlCategory = "
-        //     INSERT INTO categories (name, is_default, username)
-        //     SELECT name, TRUE, ? FROM categories WHERE username IS NULL AND is_default = TRUE
-        // ";
-        // $stmtCategory = $konek->prepare($sqlCategory); // Tetap pakai $konek
-        // $stmtCategory->bind_param("s", $username);
-        // $stmtCategory->execute();
-        // $stmtCategory->close(); // Tutup $stmtCategory setelah digunakan
+        header("Location: ../index.php?pesan=sukses_regist"); 
+        exit(); 
     } else {
-        // Memeriksa apakah kesalahan disebabkan oleh duplikasi username
-        if ($stmtUser->errno == 1062) { // Error code untuk duplikasi
-            echo '<div class="alert alert-danger">Username sudah digunakan, silakan pilih username lain.</div>';
+        if ($stmtUser->errno == 1062) {
+            setErrorAndRedirect("Username '" . htmlspecialchars($username) . "' sudah digunakan, silakan pilih username lain.");
         } else {
-            echo '<div class="alert alert-danger">Error: ' . $stmtUser->error . '</div>';
+            setErrorAndRedirect("Registrasi gagal. Error database: " . $stmtUser->error);
         }
     }
 
-    // Tutup statement dan koneksi
-    $stmtUser->close(); // Tutup $stmtUser setelah digunakan
-    $konek->close(); // Tetap pakai $konek
+    $stmtUser->close();
+    $konek->close();
 } else {
-    echo '<div class="alert alert-danger">Tidak ada data yang dikirim.</div>';
+    setErrorAndRedirect("Akses tidak valid.");
 }
 ?>

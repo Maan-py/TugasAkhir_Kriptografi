@@ -92,7 +92,6 @@
 <body>
   <div class="container">
     <h2>Login</h2>
-    <!-- cek pesan notifikasi -->
     <?php
     if (isset($_GET['pesan'])) {
       echo "<div class='message'>";
@@ -107,7 +106,6 @@
       } else if ($_GET['pesan'] == "sukses_login") {
         echo "Login berhasil!";
       }
-      // --- AKHIR TAMBAHAN ---
       echo "</div>";
     }
     ?>

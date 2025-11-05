@@ -1,52 +1,109 @@
 <?php
-// File: php/simpan_textEnkrip.php
 
 /**
- * Fungsi untuk menyimpan data terenkripsi ke database (Tabel usersData v2).
- * Menggunakan INSERT INTO untuk data baru.
- *
+ * @param mysqli 
+ * @param array 
+ * @return bool|string 
+ */
+
+function simpanDataPribadi(mysqli $konek, array $data): int|false
+{
+    $sql = "INSERT INTO usersData (
+                username, data_label, 
+                enc_nama, enc_telepon, enc_tempat_lahir, 
+                enc_tanggal_lahir, enc_alamat
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)"; // Dihilangkan enc_pesan_bebas
+
+    $stmt = $konek->prepare($sql);
+    if (!$stmt) return false;
+
+    $stmt->bind_param("sssssss", 
+        $data['username'],
+        $data['data_label'],
+        $data['enc_nama'],
+        $data['enc_telepon'],
+        $data['enc_tempat_lahir'],
+        $data['enc_tanggal_lahir'],
+        $data['enc_alamat']
+    );
+
+    if ($stmt->execute()) {
+        $new_data_id = $konek->insert_id; 
+        $stmt->close();
+        return $new_data_id;
+    } else {
+        $stmt->close();
+        return false;
+    }
+}
+
+
+function simpanCatatanRahasia(mysqli $konek, int $data_id, string $username, ?string $enc_pesan_bebas): bool
+{
+    $sql = "INSERT INTO usersCatatan (
+                data_id, username, enc_pesan_bebas
+            ) VALUES (?, ?, ?)";
+    
+    $stmt = $konek->prepare($sql);
+    if (!$stmt) return false;
+
+    $stmt->bind_param("iss", 
+        $data_id,
+        $username,
+        $enc_pesan_bebas
+    );
+
+    $eksekusi = $stmt->execute();
+    $stmt->close();
+    return $eksekusi;
+}
+
+
+/**
  * @param mysqli $konek Koneksi database
  * @param array $data_to_save Array asosiatif berisi data yang sudah siap simpan
  * @return bool|string True jika sukses, string error jika gagal
  */
-function simpanDataEnkripsi(mysqli $konek, array $data_to_save): bool|string
+function simpanDataEnkripsiTerpisah(mysqli $konek, array $data_to_save): bool|string
 {
-    // Query untuk memasukkan data baru (sesuai tabel v2 kita)
-    $sql = "INSERT INTO usersData (
-                username, data_label, 
-                enc_nama, enc_telepon, enc_tempat_lahir, 
-                enc_tanggal_lahir, enc_alamat, enc_pesan_bebas
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-    
-    $stmt = $konek->prepare($sql);
-    
-    if (!$stmt) {
-        // Jika Gagal 'prepare', kembalikan pesan error
-        return "Gagal menyimpan: Gagal 'prepare statement'.";
-    }
+    $konek->begin_transaction();
 
-    // Bind 8 parameter (s = string)
-    $stmt->bind_param("ssssssss", 
-        $data_to_save['username'],
-        $data_to_save['data_label'],
-        $data_to_save['enc_nama'],
-        $data_to_save['enc_telepon'],
-        $data_to_save['enc_tempat_lahir'],
-        $data_to_save['enc_tanggal_lahir'],
-        $data_to_save['enc_alamat'],
-        $data_to_save['enc_pesan_bebas']
-    );
+    try {
+        $data_pribadi = [
+            'username' => $data_to_save['username'],
+            'data_label' => $data_to_save['data_label'],
+            'enc_nama' => $data_to_save['enc_nama'],
+            'enc_telepon' => $data_to_save['enc_telepon'],
+            'enc_tempat_lahir' => $data_to_save['enc_tempat_lahir'],
+            'enc_tanggal_lahir' => $data_to_save['enc_tanggal_lahir'],
+            'enc_alamat' => $data_to_save['enc_alamat']
+        ];
+        
+        $new_data_id = simpanDataPribadi($konek, $data_pribadi);
+        
+        if ($new_data_id === false) {
+            throw new Exception("Gagal menyimpan data pribadi ke usersData.");
+        }
 
-    // Eksekusi
-    if ($stmt->execute()) {
-        // Jika sukses, tutup dan kembalikan true
-        $stmt->close();
+        $pesan_bebas_terenkripsi = $data_to_save['enc_pesan_bebas'] ?? null;
+        
+        $sukses_catatan = simpanCatatanRahasia(
+            $konek, 
+            $new_data_id, // Gunakan ID baru dari Langkah 1
+            $data_to_save['username'], 
+            $pesan_bebas_terenkripsi
+        );
+
+        if (!$sukses_catatan) {
+            throw new Exception("Gagal menyimpan catatan rahasia ke usersCatatan.");
+        }
+        
+        $konek->commit();
         return true;
-    } else {
-        // Jika gagal, kembalikan pesan error
-        $error_msg = "Gagal menyimpan: Gagal 'execute statement'. " . $stmt->error;
-        $stmt->close();
-        return $error_msg;
+
+    } catch (Exception $e) {
+        $konek->rollback();
+        return "Gagal menyimpan: " . $e->getMessage();
     }
 }
 ?>

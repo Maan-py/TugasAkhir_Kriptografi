@@ -78,9 +78,7 @@ function time_ago($timestamp)
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dashboard - Brankas Pribadi</title>
-    <!-- 1. CSS Dashboard Baru -->
     <link rel="stylesheet" href="css/dashboard.css">
-    <!-- 2. Font Awesome CDN (Untuk Ikon Baru) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
 
@@ -90,7 +88,6 @@ function time_ago($timestamp)
             <div class="header-content">
                 <div class="header-left">
                     <h1>Brankas Catatan Pribadimu</h1>
-                    <!-- 3. Sapaan Sesuai Waktu (Dinamis) -->
                     <span class="welcome-text">
                         <?php echo $sapaan; ?>, <strong><?php echo htmlspecialchars($_SESSION['username']); ?></strong>
                     </span>
@@ -98,11 +95,6 @@ function time_ago($timestamp)
 
 
                 <div class="header-right">
-                    <!-- <button id="toggle-theme" title="Ganti Tema">
-                        <i class="fa-solid fa-moon"></i>
-                    </button> -->
-                    <!-- 4. Tombol Aksi Cepat (Quick Action) -->
-                    <!-- TOMBOL DIHAPUS SESUAI PERMINTAAN -->
                     <a href="php/logout.php" class="logout-btn">Logout</a>
                 </div>
             </div>
@@ -110,7 +102,6 @@ function time_ago($timestamp)
 
         <main class="dashboard-main">
 
-            <!-- 5. Kartu Ringkasan & Aktivitas Terbaru (Dinamis) -->
             <div class="summary-row">
                 <div class="summary-card">
                     <i class="fa-solid fa-lock"></i>
@@ -128,9 +119,6 @@ function time_ago($timestamp)
                 </div>
             </div>
 
-            <!-- 6. Pengelompokan Visual & Nama Modul Baru -->
-
-            <!-- Grup 1: Brankas Catatan Pribadi -->
             <div class="module-group">
                 <h2>Brankas Catatan Pribadi</h2>
                 <div class="menu-grid">
@@ -149,7 +137,6 @@ function time_ago($timestamp)
                 </div>
             </div>
 
-            <!-- Grup 2: Perkakas Keamanan File -->
             <div class="module-group">
                 <h2>Perkakas Keamanan File</h2>
                 <div class="menu-grid">
@@ -168,7 +155,6 @@ function time_ago($timestamp)
                 </div>
             </div>
 
-            <!-- Grup 3: Pesan Rahasia Gambar -->
             <div class="module-group">
                 <h2>Pesan Rahasia Gambar</h2>
                 <div class="menu-grid">
