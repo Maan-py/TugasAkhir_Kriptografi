@@ -13,131 +13,162 @@ $error = "";
 $success = "";
 $extracted_message = "";
 $uploaded_image = "";
+$all_metadata_html = "";
 
-// Fungsi untuk mengekstrak pesan dari gambar menggunakan LSB
-function extractMessageFromImage($imagePath)
+// Ekstrak pesan dari metadata JPEG (IPTC Caption 2:120 atau EXIF UserComment)
+function extractMessageFromJpegMetadata($jpegPath, $keyOrEmpty)
 {
-    // Baca gambar
-    $imageInfo = getimagesize($imagePath);
-    if ($imageInfo === false) {
-        return false;
+    $info = [];
+    $size = @getimagesize($jpegPath, $info);
+    if ($size === false || $size[2] !== IMAGETYPE_JPEG) {
+        return [false, 'File bukan JPEG atau rusak.'];
     }
 
-    $imageType = $imageInfo[2];
-
-    // Buat image resource berdasarkan tipe
-    switch ($imageType) {
-        case IMAGETYPE_JPEG:
-            $image = imagecreatefromjpeg($imagePath);
-            break;
-        case IMAGETYPE_PNG:
-            $image = imagecreatefrompng($imagePath);
-            break;
-        case IMAGETYPE_GIF:
-            $image = imagecreatefromgif($imagePath);
-            break;
-        default:
-            return false;
+    $rawMessage = '';
+    if (isset($info['APP13'])) {
+        $iptc = @iptcparse($info['APP13']);
+        if ($iptc && isset($iptc['2#120'])) {
+            // Bisa berupa array jika lebih dari satu
+            $rawMessage = is_array($iptc['2#120']) ? implode('', $iptc['2#120']) : $iptc['2#120'];
+        }
     }
 
-    if ($image === false) {
-        return false;
-    }
-
-    $width = imagesx($image);
-    $height = imagesy($image);
-
-    $message = "";
-    $char = 0;
-    $bitIndex = 0;
-
-    // Loop melalui setiap pixel
-    for ($y = 0; $y < $height; $y++) {
-        for ($x = 0; $x < $width; $x++) {
-            $rgb = imagecolorat($image, $x, $y);
-
-            // Ekstrak RGB
-            $r = ($rgb >> 16) & 0xFF;
-            $g = ($rgb >> 8) & 0xFF;
-            $b = $rgb & 0xFF;
-
-            // Ekstrak bit dari LSB setiap channel
-            // R channel
-            $bit = $r & 1;
-            $char |= ($bit << $bitIndex);
-            $bitIndex++;
-
-            if ($bitIndex >= 8) {
-                // Cek delimiter
-                if ($char == 0) {
-                    imagedestroy($image);
-                    return $message;
+    if ($rawMessage === '') {
+        // fallback EXIF UserComment
+        if (function_exists('exif_read_data')) {
+            $exif = @exif_read_data($jpegPath, 'COMMENT,EXIF,IFD0', true);
+            if ($exif) {
+                // UserComment bisa di EXIF['EXIF']['UserComment']
+                if (isset($exif['EXIF']['UserComment'])) {
+                    $val = $exif['EXIF']['UserComment'];
+                    if (is_array($val)) $val = implode('', $val);
+                    $rawMessage = $val;
                 }
-
-                // Cek delimiter "|||END|||"
-                $message .= chr($char);
-                if (substr($message, -9) === "|||END|||") {
-                    $message = substr($message, 0, -9);
-                    imagedestroy($image);
-                    return $message;
-                }
-
-                $char = 0;
-                $bitIndex = 0;
-            }
-
-            // G channel
-            $bit = $g & 1;
-            $char |= ($bit << $bitIndex);
-            $bitIndex++;
-
-            if ($bitIndex >= 8) {
-                if ($char == 0) {
-                    imagedestroy($image);
-                    return $message;
-                }
-
-                $message .= chr($char);
-                if (substr($message, -9) === "|||END|||") {
-                    $message = substr($message, 0, -9);
-                    imagedestroy($image);
-                    return $message;
-                }
-
-                $char = 0;
-                $bitIndex = 0;
-            }
-
-            // B channel
-            $bit = $b & 1;
-            $char |= ($bit << $bitIndex);
-            $bitIndex++;
-
-            if ($bitIndex >= 8) {
-                if ($char == 0) {
-                    imagedestroy($image);
-                    return $message;
-                }
-
-                $message .= chr($char);
-                if (substr($message, -9) === "|||END|||") {
-                    $message = substr($message, 0, -9);
-                    imagedestroy($image);
-                    return $message;
-                }
-
-                $char = 0;
-                $bitIndex = 0;
             }
         }
     }
 
-    imagedestroy($image);
-    return $message;
+    if ($rawMessage === '') {
+        return [false, 'Tidak menemukan pesan pada metadata JPEG.'];
+    }
+
+    // Jika ada key, asumsikan data disimpan sebagai base64(ciphertext_AES-128-ECB)
+    if (!empty($keyOrEmpty)) {
+        $cipherB64 = $rawMessage;
+        $cipher = base64_decode($cipherB64, true);
+        if ($cipher === false) {
+            return [false, 'Data metadata tidak valid (bukan base64 terenkripsi).'];
+        }
+        $plain = openssl_decrypt($cipher, 'AES-128-ECB', $keyOrEmpty);
+        if ($plain === false) {
+            return [false, 'Kunci salah atau data terenkripsi rusak.'];
+        }
+        return [true, $plain];
+    }
+
+    // Tanpa key: tampilkan apa adanya
+    return [true, $rawMessage];
+}
+
+// Kumpulkan seluruh metadata JPEG (IPTC + EXIF) dan kembalikan sebagai string JSON terformat
+function esc($v)
+{
+    return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+}
+
+function formatMetadataHtmlRecursive($data)
+{
+    if (!is_array($data)) {
+        return '<span>' . esc($data) . '</span>';
+    }
+    $html = '<ul style="margin:0; padding-left:1rem; list-style:disc;">';
+    foreach ($data as $k => $v) {
+        $key = esc($k);
+        if (is_array($v)) {
+            // Flatten single-element arrays with numeric keys (common in IPTC)
+            if (count($v) === 1 && array_key_exists(0, $v) && !is_array($v[0])) {
+                $html .= '<li><strong>' . $key . ':</strong> ' . esc($v[0]) . '</li>';
+            } else {
+                $html .= '<li><strong>' . $key . ':</strong> ' . formatMetadataHtmlRecursive($v) . '</li>';
+            }
+        } else {
+            $html .= '<li><strong>' . $key . ':</strong> ' . esc($v) . '</li>';
+        }
+    }
+    $html .= '</ul>';
+    return $html;
+}
+
+function formatIptcHtmlRecursive($data)
+{
+    if (!is_array($data)) {
+        return '<span>' . esc($data) . '</span>';
+    }
+    $html = '<ul style="margin:0; padding-left:1rem; list-style:disc;">';
+    foreach ($data as $k => $v) {
+        $key = esc($k);
+        if ($k === '2#120') {
+            $key = 'Pesan-Rahasia';
+        }
+        if (is_array($v)) {
+            if (count($v) === 1 && array_key_exists(0, $v) && !is_array($v[0])) {
+                $html .= '<li><strong>' . $key . ':</strong> ' . esc($v[0]) . '</li>';
+            } else {
+                $html .= '<li><strong>' . $key . ':</strong> ' . formatIptcHtmlRecursive($v) . '</li>';
+            }
+        } else {
+            $html .= '<li><strong>' . $key . ':</strong> ' . esc($v) . '</li>';
+        }
+    }
+    $html .= '</ul>';
+    return $html;
+}
+
+function collectAllJpegMetadataHtml($jpegPath)
+{
+    $meta = [
+        'basic' => null,
+        'iptc' => null,
+        'exif' => null,
+    ];
+
+    $basic = @getimagesize($jpegPath, $info);
+    if ($basic !== false) {
+        $meta['basic'] = [
+            'width' => $basic[0],
+            'height' => $basic[1],
+            'mime' => isset($basic['mime']) ? $basic['mime'] : null,
+        ];
+        if (isset($info['APP13'])) {
+            $iptc = @iptcparse($info['APP13']);
+            if ($iptc !== false) {
+                $meta['iptc'] = $iptc;
+            }
+        }
+    }
+
+    if (function_exists('exif_read_data')) {
+        $exif = @exif_read_data($jpegPath, null, true);
+        if ($exif !== false) {
+            $meta['exif'] = $exif;
+        }
+    }
+
+    $sections = '';
+    foreach (['basic' => 'Informasi Dasar', 'iptc' => 'IPTC', 'exif' => 'EXIF'] as $key => $label) {
+        if (!empty($meta[$key])) {
+            $sections .= '<div style="margin-bottom:1rem;"><div style="font-weight:600;color:#b56576;margin-bottom:0.5rem;">' . esc($label) . '</div>' . ($key === 'iptc' ? formatIptcHtmlRecursive($meta[$key]) : formatMetadataHtmlRecursive($meta[$key])) . '</div>';
+        }
+    }
+    if ($sections === '') {
+        $sections = '<em>Tidak ada metadata yang ditemukan.</em>';
+    }
+    return $sections;
 }
 
 // Proses upload dan ekstraksi
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt'])) {
+    $keyInput = isset($_POST['key']) ? $_POST['key'] : '';
     if (!isset($_FILES['image']) || $_FILES['image']['error'] !== UPLOAD_ERR_OK) {
         $error = "Silakan pilih gambar yang valid!";
     } else {
@@ -146,24 +177,26 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt'])) {
             mkdir($uploadDir, 0777, true);
         }
 
-        $allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+        $allowedTypes = ['image/jpeg', 'image/jpg'];
         $fileType = $_FILES['image']['type'];
 
         if (!in_array($fileType, $allowedTypes)) {
-            $error = "Format gambar tidak didukung! Hanya JPEG, PNG, dan GIF yang diperbolehkan.";
+            $error = "Hanya JPG yang didukung untuk ekstraksi metadata.";
         } else {
             $uploadFile = $uploadDir . uniqid() . '_' . basename($_FILES['image']['name']);
 
             if (move_uploaded_file($_FILES['image']['tmp_name'], $uploadFile)) {
-                $extracted = extractMessageFromImage($uploadFile);
-
-                if ($extracted !== false && !empty($extracted)) {
-                    $extracted_message = $extracted;
+                list($ok, $out) = extractMessageFromJpegMetadata($uploadFile, $keyInput);
+                if ($ok) {
+                    $extracted_message = $out;
                     $uploaded_image = basename($uploadFile);
-                    $success = "Pesan berhasil diekstrak dari gambar!";
+                    $success = "Pesan berhasil diekstrak dari metadata JPEG!";
                 } else {
-                    $error = "Tidak ada pesan yang ditemukan dalam gambar ini atau format tidak valid!";
+                    $error = $out ?: "Tidak ada pesan yang ditemukan atau format tidak valid.";
                 }
+
+                // Kumpulkan metadata apapun hasilnya, untuk ditampilkan (HTML terformat)
+                $all_metadata_html = collectAllJpegMetadataHtml($uploadFile);
 
                 // Hapus file setelah diekstrak
                 unlink($uploadFile);
@@ -203,7 +236,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt'])) {
             font-weight: 600;
         }
 
-        .form-group input[type="file"] {
+        .form-group input[type="file"],
+        .form-group input[type="text"] {
             width: 100%;
             padding: 0.8rem;
             border: 1px solid #f3b7c0;
@@ -216,6 +250,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt'])) {
         .form-group input[type="file"]:focus {
             border-color: #e29fa6;
         }
+
+
 
         .btn-group {
             display: flex;
@@ -329,8 +365,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt'])) {
             <div class="encryption-container">
                 <a href="../dashboard.php" class="back-link">← Kembali ke Dashboard</a>
 
-                <h2 style="color: #e29fa6; margin-bottom: 1rem;">Steganografi - Mengekstrak Pesan dari Gambar</h2>
-                <p style="color: #666; margin-bottom: 2rem;">Unggah gambar yang mengandung pesan tersembunyi untuk mengekstrak pesan menggunakan teknik LSB (Least Significant Bit)</p>
+                <h2 style="color: #e29fa6; margin-bottom: 1rem;">Steganografi - Ekstraksi Pesan (EXIF/IPTC)</h2>
+                <p style="color: #666; margin-bottom: 2rem;">Unggah JPG yang berisi pesan pada metadata (IPTC/EXIF). Jika disimpan dengan kunci, masukkan kunci yang sama untuk mendekripsi.</p>
 
                 <?php if (!empty($error)): ?>
                     <div class="alert-error"><?php echo htmlspecialchars($error); ?></div>
@@ -342,9 +378,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt'])) {
 
                 <form method="POST" action="" enctype="multipart/form-data">
                     <div class="form-group">
-                        <label for="image">Pilih Gambar yang Mengandung Pesan Tersembunyi:</label>
-                        <input type="file" name="image" id="image" accept="image/jpeg,image/jpg,image/png,image/gif" required>
-                        <p class="info-text">Format yang didukung: JPEG, PNG, GIF. Pastikan gambar dibuat menggunakan steganografi encryption.</p>
+                        <label for="image">Pilih Gambar (JPG):</label>
+                        <input type="file" name="image" id="image" accept="image/jpeg,image/jpg" required>
+                        <p class="info-text">Hanya JPEG. Metadata dari platform tertentu bisa dihapus (mis. media sosial).</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="key">Kunci Dekripsi (opsional):</label>
+                        <input type="text" name="key" id="key" placeholder="Isi jika pesan dienkripsi (AES-128-ECB)">
                     </div>
 
                     <div class="btn-group">
@@ -358,6 +399,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt'])) {
                         <label>Pesan yang Diekstrak:</label>
                         <div class="result-box" id="extracted-result"><?php echo htmlspecialchars($extracted_message); ?></div>
                         <button type="button" class="btn btn-copy" onclick="copyToClipboard()" style="margin-top: 1rem;">Salin Pesan</button>
+                    </div>
+                <?php endif; ?>
+
+                <?php if (!empty($all_metadata_html)): ?>
+                    <div class="result-group">
+                        <label>Metadata Gambar (IPTC/EXIF):</label>
+                        <div class="result-box" style="max-height: 400px; overflow: auto;">
+                            <?php echo $all_metadata_html; ?>
+                        </div>
                     </div>
                 <?php endif; ?>
             </div>

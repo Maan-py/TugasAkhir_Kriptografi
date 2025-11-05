@@ -14,136 +14,41 @@ $success = "";
 $output_image = "";
 $message = "";
 
-// Fungsi untuk menyembunyikan pesan dalam gambar menggunakan LSB
-function hideMessageInImage($imagePath, $message, $outputPath)
+// Embed pesan ke metadata JPEG (IPTC Caption 2:120). Opsi: enkripsi AES-128-ECB + base64.
+function embedMessageInJpegMetadata($jpegPath, $message, $keyOrEmpty, $outputPath)
 {
-    // Baca gambar
-    $imageInfo = getimagesize($imagePath);
-    if ($imageInfo === false) {
-        return false;
+    $imageInfo = getimagesize($jpegPath);
+    if ($imageInfo === false || $imageInfo[2] !== IMAGETYPE_JPEG) {
+        return [false, 'Hanya JPEG yang didukung untuk EXIF/IPTC steganografi.'];
     }
 
-    $imageType = $imageInfo[2];
-
-    // Buat image resource berdasarkan tipe
-    switch ($imageType) {
-        case IMAGETYPE_JPEG:
-            $image = imagecreatefromjpeg($imagePath);
-            break;
-        case IMAGETYPE_PNG:
-            $image = imagecreatefrompng($imagePath);
-            break;
-        case IMAGETYPE_GIF:
-            $image = imagecreatefromgif($imagePath);
-            break;
-        default:
-            return false;
-    }
-
-    if ($image === false) {
-        return false;
-    }
-
-    $width = imagesx($image);
-    $height = imagesy($image);
-
-    // Pastikan gambar bertipe truecolor untuk pengeditan pixel akurat
-    if (!imageistruecolor($image)) {
-        $truecolor = imagecreatetruecolor($width, $height);
-        imagecopy($truecolor, $image, 0, 0, 0, 0, $width, $height);
-        imagedestroy($image);
-        $image = $truecolor;
-    }
-
-    // Tambahkan delimiter di akhir pesan
-    $message .= "|||END|||";
-    $messageLength = strlen($message);
-
-    // Cek apakah gambar cukup besar untuk menyimpan pesan
-    $maxMessageLength = ($width * $height * 3) / 8; // 3 bits per pixel (RGB)
-    if ($messageLength > $maxMessageLength) {
-        imagedestroy($image);
-        return false;
-    }
-
-    $messageIndex = 0;
-    $bitIndex = 0;
-    $char = ord($message[0]);
-
-    // Loop melalui setiap pixel
-    for ($y = 0; $y < $height; $y++) {
-        for ($x = 0; $x < $width; $x++) {
-            $rgb = imagecolorat($image, $x, $y);
-
-            // Ekstrak RGB
-            $r = ($rgb >> 16) & 0xFF;
-            $g = ($rgb >> 8) & 0xFF;
-            $b = $rgb & 0xFF;
-
-            // Embed bit ke LSB dari setiap channel
-            if ($messageIndex < $messageLength) {
-                // R channel
-                if ($bitIndex < 8) {
-                    $bit = ($char >> $bitIndex) & 1;
-                    $r = ($r & 0xFE) | $bit;
-                    $bitIndex++;
-
-                    if ($bitIndex >= 8) {
-                        $bitIndex = 0;
-                        $messageIndex++;
-                        if ($messageIndex < $messageLength) {
-                            $char = ord($message[$messageIndex]);
-                        }
-                    }
-                }
-
-                // G channel
-                if ($bitIndex < 8 && $messageIndex < $messageLength) {
-                    $bit = ($char >> $bitIndex) & 1;
-                    $g = ($g & 0xFE) | $bit;
-                    $bitIndex++;
-
-                    if ($bitIndex >= 8) {
-                        $bitIndex = 0;
-                        $messageIndex++;
-                        if ($messageIndex < $messageLength) {
-                            $char = ord($message[$messageIndex]);
-                        }
-                    }
-                }
-
-                // B channel
-                if ($bitIndex < 8 && $messageIndex < $messageLength) {
-                    $bit = ($char >> $bitIndex) & 1;
-                    $b = ($b & 0xFE) | $bit;
-                    $bitIndex++;
-
-                    if ($bitIndex >= 8) {
-                        $bitIndex = 0;
-                        $messageIndex++;
-                        if ($messageIndex < $messageLength) {
-                            $char = ord($message[$messageIndex]);
-                        }
-                    }
-                }
-            }
-
-            // Set warna baru
-            $newColor = imagecolorallocate($image, $r, $g, $b);
-            imagesetpixel($image, $x, $y, $newColor);
+    if (!empty($keyOrEmpty)) {
+        $cipherText = openssl_encrypt($message, 'AES-128-ECB', $keyOrEmpty);
+        if ($cipherText === false) {
+            return [false, 'Gagal mengenkripsi pesan.'];
         }
+        $messageToStore = base64_encode($cipherText);
+    } else {
+        $messageToStore = $message;
     }
 
-    // Simpan gambar SELALU sebagai PNG (lossless) agar LSB tidak rusak oleh kompresi lossy
-    $result = imagepng($image, $outputPath);
+    // IPTC tag 2:120 (Caption)
+    $iptcTag = chr(0x1C) . chr(2) . chr(120);
+    $len = strlen($messageToStore);
+    $iptcData = $iptcTag . chr($len >> 8) . chr($len & 0xFF) . $messageToStore;
 
-    imagedestroy($image);
-    return $result;
+    $newImageData = @iptcembed($iptcData, $jpegPath);
+    if ($newImageData === false) {
+        return [false, 'Gagal menyematkan metadata IPTC ke JPEG.'];
+    }
+    $ok = file_put_contents($outputPath, $newImageData) !== false;
+    return [$ok, $ok ? '' : 'Gagal menulis file keluaran.'];
 }
 
 // Proses upload dan steganografi
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
     $message = $_POST['message'];
+    $keyInput = isset($_POST['key']) ? $_POST['key'] : '';
 
     if (empty($message)) {
         $error = "Silakan masukkan pesan yang akan disembunyikan!";
@@ -155,25 +60,24 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
             mkdir($uploadDir, 0777, true);
         }
 
-        $allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+        $allowedTypes = ['image/jpeg', 'image/jpg'];
         $fileType = $_FILES['image']['type'];
 
         if (!in_array($fileType, $allowedTypes)) {
-            $error = "Format gambar tidak didukung! Hanya JPEG, PNG, dan GIF yang diperbolehkan.";
+            $error = "Hanya file JPG yang didukung untuk EXIF/IPTC steganografi!";
         } else {
             $uploadFile = $uploadDir . uniqid() . '_' . basename($_FILES['image']['name']);
-            $outputFile = $uploadDir . 'stego_' . uniqid() . '.png';
+            $outputFile = $uploadDir . 'stego_' . uniqid() . '.jpg';
 
             if (move_uploaded_file($_FILES['image']['tmp_name'], $uploadFile)) {
-                if (hideMessageInImage($uploadFile, $message, $outputFile)) {
+                list($ok, $err) = embedMessageInJpegMetadata($uploadFile, $message, $keyInput, $outputFile);
+                if ($ok) {
                     $output_image = basename($outputFile);
-                    $success = "Pesan berhasil disembunyikan dalam gambar!";
-                    // Hapus file upload original
-                    unlink($uploadFile);
+                    $success = "Pesan berhasil disembunyikan ke dalam metadata JPEG!";
                 } else {
-                    $error = "Gagal menyembunyikan pesan! Pastikan gambar cukup besar untuk menyimpan pesan.";
-                    unlink($uploadFile);
+                    $error = $err ?: "Gagal menyembunyikan pesan.";
                 }
+                if (file_exists($uploadFile)) unlink($uploadFile);
             } else {
                 $error = "Gagal mengunggah gambar!";
             }
@@ -211,6 +115,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
         }
 
         .form-group input[type="file"],
+        .form-group input[type="text"],
         .form-group textarea {
             width: 100%;
             padding: 0.8rem;
@@ -346,8 +251,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
             <div class="encryption-container">
                 <a href="../dashboard.php" class="back-link">← Kembali ke Dashboard</a>
 
-                <h2 style="color: #e29fa6; margin-bottom: 1rem;">Steganografi - Menyembunyikan Pesan dalam Gambar</h2>
-                <p style="color: #666; margin-bottom: 2rem;">Pilih gambar dan masukkan pesan rahasia yang akan disembunyikan menggunakan teknik LSB (Least Significant Bit)</p>
+                <h2 style="color: #e29fa6; margin-bottom: 1rem;">Steganografi - Menyembunyikan Pesan (EXIF/IPTC)</h2>
+                <p style="color: #666; margin-bottom: 2rem;">Unggah file JPG dan masukkan pesan rahasia untuk disembunyikan dalam metadata.</p>
 
                 <?php if (!empty($error)): ?>
                     <div class="alert-error"><?php echo htmlspecialchars($error); ?></div>
@@ -359,15 +264,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
 
                 <form method="POST" action="" enctype="multipart/form-data">
                     <div class="form-group">
-                        <label for="image">Pilih Gambar (JPEG, PNG, atau GIF):</label>
-                        <input type="file" name="image" id="image" accept="image/jpeg,image/jpg,image/png,image/gif" required>
-                        <p class="info-text">Format yang didukung: JPEG, PNG, GIF. Gambar harus cukup besar untuk menyimpan pesan.</p>
+                        <label for="image">Pilih Gambar (JPG):</label>
+                        <input type="file" name="image" id="image" accept="image/jpeg,image/jpg" required>
+                        <p class="info-text">EXIF/IPTC hanya tersedia pada JPEG. Gambar hasil akan berformat JPG.</p>
                     </div>
 
                     <div class="form-group">
-                        <label for="message">Masukkan Pesan yang Akan Disembunyikan:</label>
+                        <label for="message">Pesan Rahasia:</label>
                         <textarea name="message" id="message" placeholder="Masukkan pesan rahasia..." required><?php echo htmlspecialchars($message); ?></textarea>
-                        <p class="info-text">Pesan akan disembunyikan dalam gambar menggunakan teknik LSB. Semakin panjang pesan, semakin besar gambar yang diperlukan.</p>
+                        <p class="info-text">Opsional: gunakan kunci untuk mengenkripsi pesan (AES-128-ECB, disimpan base64 di metadata).</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="key">Kunci Enkripsi (opsional):</label>
+                        <input type="text" name="key" id="key" placeholder="Kosongkan jika tidak ingin dienkripsi">
                     </div>
 
                     <div class="btn-group">
