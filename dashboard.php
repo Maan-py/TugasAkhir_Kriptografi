@@ -9,11 +9,9 @@ if (!isset($_SESSION['username'])) {
 
 include "php/koneksi.php";
 
-// 1. LOGIKA SAPAAN WAKTU
-// Atur zona waktu ke Asia/Jakarta
 date_default_timezone_set('Asia/Jakarta');
 $jam = (int)date('H');
-$sapaan = "Selamat Datang"; // Default
+$sapaan = "Selamat Datang"; 
 
 if ($jam >= 4 && $jam < 11) {
     $sapaan = "Selamat Pagi ☀️";
@@ -25,7 +23,6 @@ if ($jam >= 4 && $jam < 11) {
     $sapaan = "Selamat Malam 🌙";
 }
 
-// 2. LOGIKA DATA RINGKASAN & AKTIVITAS TERBARU
 $username = $_SESSION['username'];
 $total_catatan = 0;
 $aktivitas_terbaru = "Belum ada aktivitas. Coba tulis catatan pertamamu!";
@@ -46,16 +43,12 @@ $result_recent = $stmt_recent->get_result();
 
 if ($result_recent->num_rows > 0) {
     $row_recent = $result_recent->fetch_assoc();
-    // Panggil fungsi time_ago (didefinisikan di bawah)
     $aktivitas_terbaru = "Kamu menyimpan '" . htmlspecialchars($row_recent['data_label']) . "' (" . time_ago($row_recent['created_at']) . ")";
 }
 $stmt_recent->close();
 $konek->close();
 
-/**
- * Fungsi helper untuk mengubah timestamp menjadi format "time ago"
- * (Misal: "5 menit lalu", "2 jam lalu")
- */
+
 function time_ago($timestamp)
 {
     $waktu_lalu = new DateTime($timestamp);
