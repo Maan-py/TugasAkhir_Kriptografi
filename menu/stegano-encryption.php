@@ -14,7 +14,7 @@ $success = "";
 $output_image = "";
 $message = "";
 
-// Embed pesan ke metadata JPEG (IPTC Caption 2:120). Opsi: enkripsi AES-128-ECB + base64.
+// Embed pesan ke metadata JPEG (IPTC Caption 2:120). enkripsi AES-128-ECB + base64.
 function embedMessageInJpegMetadata($jpegPath, $message, $keyOrEmpty, $outputPath)
 {
     $imageInfo = getimagesize($jpegPath);
@@ -32,7 +32,7 @@ function embedMessageInJpegMetadata($jpegPath, $message, $keyOrEmpty, $outputPat
         $messageToStore = $message;
     }
 
-    // IPTC tag 2:120 (Caption)
+
     $iptcTag = chr(0x1C) . chr(2) . chr(120);
     $len = strlen($messageToStore);
     $iptcData = $iptcTag . chr($len >> 8) . chr($len & 0xFF) . $messageToStore;

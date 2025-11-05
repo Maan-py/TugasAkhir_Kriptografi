@@ -14,7 +14,7 @@ $success = "";
 $decrypted_file = "";
 $original_filename = "";
 
-$lastCryptoError = ""; // diisi jika ada error kripto
+$lastCryptoError = ""; 
 
 function decryptFile($filePath, $outputPath, $password)
 {
@@ -335,10 +335,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt'])) {
                         <input type="text" name="password" id="password" placeholder="Masukkan password yang digunakan saat enkripsi" required>
                         <p class="info-text">Password harus sama persis dengan password yang digunakan saat mengenkripsi file.</p>
                     </div>
-
-                    <!-- <div class="password-warning">
-                        <strong>ℹ️ Informasi:</strong> Jika password salah, file tidak dapat didekripsi. Pastikan password yang Anda masukkan benar.
-                    </div> -->
 
                     <div class="btn-group">
                         <button type="submit" name="decrypt" class="btn btn-primary">Dekripsi File</button>

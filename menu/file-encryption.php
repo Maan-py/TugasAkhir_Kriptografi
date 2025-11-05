@@ -1,7 +1,6 @@
 <?php
 session_start();
 
-// Cek apakah user sudah login
 if (!isset($_SESSION['username'])) {
     header("Location: ../index.php?pesan=belum_login");
     exit();
@@ -14,9 +13,9 @@ $success = "";
 $encrypted_file = "";
 $original_filename = "";
 
-$lastCryptoError = ""; // diisi jika ada error kripto
+$lastCryptoError = ""; 
 
-// Fungsi untuk mengenkripsi file menggunakan RC2-CBC (pure PHP)
+// Fungsi untuk mengenkripsi file menggunakan RC2-CBC
 function encryptFile($filePath, $outputPath, $password)
 {
     global $lastCryptoError;
@@ -36,8 +35,7 @@ function encryptFile($filePath, $outputPath, $password)
     }
 
     try {
-        // Tambahkan header + HMAC untuk verifikasi integritas/password saat dekripsi
-        $magic = "RC2FILEv1"; // 9 bytes magic
+        $magic = "RC2FILEv1"; 
         $hmac16 = substr(hash_hmac('sha256', $fileData, $key, true), 0, 16);
         $payload = $magic . $hmac16 . $fileData;
 
@@ -307,10 +305,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
                         <div id="password-strength" class="password-strength"></div>
                         <p class="info-text">Gunakan password yang kuat dan simpan dengan aman. Anda akan membutuhkan password ini untuk dekripsi!</p>
                     </div>
-
-                    <!-- <div class="password-warning">
-                        <strong>⚠️ Peringatan Penting:</strong> Simpan password Anda dengan baik! Jika password hilang, file tidak dapat didekripsi kembali. Sistem tidak menyimpan password Anda.
-                    </div> -->
 
                     <div class="btn-group">
                         <button type="submit" name="encrypt" class="btn btn-primary">Enkripsi File</button>

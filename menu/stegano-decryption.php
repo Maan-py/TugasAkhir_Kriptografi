@@ -28,7 +28,6 @@ function extractMessageFromJpegMetadata($jpegPath, $keyOrEmpty)
     if (isset($info['APP13'])) {
         $iptc = @iptcparse($info['APP13']);
         if ($iptc && isset($iptc['2#120'])) {
-            // Bisa berupa array jika lebih dari satu
             $rawMessage = is_array($iptc['2#120']) ? implode('', $iptc['2#120']) : $iptc['2#120'];
         }
     }
@@ -195,10 +194,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt'])) {
                     $error = $out ?: "Tidak ada pesan yang ditemukan atau format tidak valid.";
                 }
 
-                // Kumpulkan metadata apapun hasilnya, untuk ditampilkan (HTML terformat)
                 $all_metadata_html = collectAllJpegMetadataHtml($uploadFile);
 
-                // Hapus file setelah diekstrak
                 unlink($uploadFile);
             } else {
                 $error = "Gagal mengunggah gambar!";
@@ -422,7 +419,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt'])) {
             navigator.clipboard.writeText(text).then(function() {
                 alert('Pesan berhasil disalin ke clipboard!');
             }, function(err) {
-                // Fallback untuk browser yang tidak support clipboard API
                 const textArea = document.createElement('textarea');
                 textArea.value = text;
                 textArea.style.position = 'fixed';
