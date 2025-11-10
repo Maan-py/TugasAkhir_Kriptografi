@@ -1,0 +1,17 @@
+# Prevent directory listing
+
+Options -Indexes
+
+# Prevent access to PHP files directly
+
+<FilesMatch "\.php$">
+Order Allow,Deny
+Deny from all
+</FilesMatch>
+
+# Allow download of encrypted and decrypted files
+
+<FilesMatch "\.(enc|file|pdf|doc|docx|txt|jpg|jpeg|png|gif|zip|rar)$">
+Order Allow,Deny
+Allow from all
+</FilesMatch>

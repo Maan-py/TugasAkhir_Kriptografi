@@ -1,0 +1,7 @@
+img_encrypted/
+img_decrypted/
+file_encrypted/
+file_decrypted/
+vendor
+composer.json.bak
+composer.lock.bak

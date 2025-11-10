@@ -92,22 +92,20 @@
 <body>
   <div class="container">
     <h2>Login</h2>
-    <!-- cek pesan notifikasi -->
     <?php
     if (isset($_GET['pesan'])) {
       echo "<div class='message'>";
       if ($_GET['pesan'] == "gagal_login") {
-        echo "Login gagal! Username dan password salah!";
+        echo "Login gagal! Username atau password salah!";
       } else if ($_GET['pesan'] == "logout") {
         echo "Anda telah berhasil logout.";
       } else if ($_GET['pesan'] == "belum_login") {
-        echo "Anda harus login untuk mengakses halaman admin.";
+        echo "Anda harus login untuk mengakses halaman lainnya.";
       } else if ($_GET['pesan'] == "sukses_regist") {
         echo "Registrasi berhasil! Silakan login.";
       } else if ($_GET['pesan'] == "sukses_login") {
         echo "Login berhasil!";
       }
-      // --- AKHIR TAMBAHAN ---
       echo "</div>";
     }
     ?>

@@ -1,12 +1,17 @@
-<?php
-$hostname = "localhost"; //hostname
-$username = "root"; //username untuk login ke mysql
-$password = ""; //password untuk login ke mysql
-$database = "TA_Kripto"; //nama database
+<?php 
 
-$konek = new mysqli($hostname,$username,$password, $database);
+$host = "localhost";
+$user = "root";
+$pass = "";
+$db = "TA_Kripto";
 
-if ($konek->connect_error){
-    die('Maaf koneksi gagal: '. $konek->connect_error);
+$konek = mysqli_connect($host, $user, $pass, $db);
+
+if (mysqli_connect_errno()) {
+    $_SESSION['error_koneksi_db'] = "Gagal terhubung ke database: " . mysqli_connect_error();
+    header("Location: ../register.php"); 
+    exit(); 
 }
+
+mysqli_set_charset($konek, "utf8");
 ?>

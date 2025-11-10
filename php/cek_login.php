@@ -4,11 +4,10 @@ session_start();
 include "koneksi.php";
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    // Ambil data dari form
     $username = $_POST['username'];
     $password = $_POST['password'];
 
-    $pass = md5($password); // password
+    $pass = md5($password); 
 
     // Cek username dan password di database
     $stmt = $konek->prepare("SELECT * FROM users WHERE username = ?");
@@ -19,22 +18,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if ($result->num_rows > 0) {
         $user = $result->fetch_assoc();
 
-        // Verifikasi password
-        if ($pass) {
-            // Sukses login, simpan username ke session
+        if ($pass === $user['password']) {
             $_SESSION['username'] = $user['username'];
             echo '<div class="alert alert-success">Login berhasil!</div>';
-            header("Location: ../login.php?pesan=sukses_login");
-            // echo json_encode(['status' => 'success']);
+            header("Location: ../dashboard.php?pesan=sukses_login");
         } else {
-            // Password salah
-            echo '<div class="alert alert-success">Login gagal!</div>';
-            header("Location: ../login.php?pesan=gagal_login");
-            // echo json_encode(['status' => 'error', 'message' => 'Password salah']);
+            echo '<div class="alert alert-danger">Login gagal!</div>';
+            header("Location: ../index.php?pesan=gagal_login");
         }
     } else {
-        // Username tidak ditemukan
-        echo json_encode(['status' => 'error', 'message' => 'Username tidak ditemukan']);
+        echo '<div class="alert alert-danger">Username atau password salah!</div>';
+        header("Location: ../index.php?pesan=gagal_login");
     }
 
     // Tutup statement dan konek
