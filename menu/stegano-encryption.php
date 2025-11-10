@@ -26,7 +26,7 @@ function embedMessageInJpegMetadata($jpegPath, $message, $keyOrEmpty, $outputPat
         if ($cipherText === false) {
             return [false, 'Gagal mengenkripsi pesan.'];
         }
-        $messageToStore = $cipherText; 
+        $messageToStore = $cipherText;
     } else {
         $messageToStore = $message;
     }
