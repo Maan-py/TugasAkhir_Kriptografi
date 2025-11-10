@@ -131,7 +131,7 @@ function time_ago($timestamp)
             </div>
 
             <div class="module-group">
-                <h2>Tools Keamanan File</h2>
+                <h2>Brankas Keamanan File</h2>
                 <div class="menu-grid">
                     <div class="menu-card">
                         <div class="card-icon"><i class="fa-solid fa-file-shield"></i></div>
@@ -149,7 +149,7 @@ function time_ago($timestamp)
             </div>
 
             <div class="module-group">
-                <h2>Pesan Rahasia Gambar</h2>
+                <h2>Brankas Pesan Rahasia Gambar</h2>
                 <div class="menu-grid">
                     <div class="menu-card">
                         <div class="card-icon"><i class="fa-solid fa-image"></i></div>
