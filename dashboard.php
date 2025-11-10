@@ -11,7 +11,7 @@ include "php/koneksi.php";
 
 date_default_timezone_set('Asia/Jakarta');
 $jam = (int)date('H');
-$sapaan = "Selamat Datang"; 
+$sapaan = "Selamat Datang";
 
 if ($jam >= 4 && $jam < 11) {
     $sapaan = "Selamat Pagi ☀️";
@@ -131,7 +131,7 @@ function time_ago($timestamp)
             </div>
 
             <div class="module-group">
-                <h2>Perkakas Keamanan File</h2>
+                <h2>Tools Keamanan File</h2>
                 <div class="menu-grid">
                     <div class="menu-card">
                         <div class="card-icon"><i class="fa-solid fa-file-shield"></i></div>

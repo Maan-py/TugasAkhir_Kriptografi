@@ -14,7 +14,6 @@ $success = "";
 $output_image = "";
 $message = "";
 
-// Embed pesan ke metadata JPEG (IPTC Caption 2:120). enkripsi AES-128-ECB + base64.
 function embedMessageInJpegMetadata($jpegPath, $message, $keyOrEmpty, $outputPath)
 {
     $imageInfo = getimagesize($jpegPath);
@@ -23,11 +22,11 @@ function embedMessageInJpegMetadata($jpegPath, $message, $keyOrEmpty, $outputPat
     }
 
     if (!empty($keyOrEmpty)) {
-        $cipherText = openssl_encrypt($message, 'AES-128-ECB', $keyOrEmpty);
+        $cipherText = openssl_encrypt($message, 'AES-128-ECB', $keyOrEmpty, OPENSSL_RAW_DATA);
         if ($cipherText === false) {
             return [false, 'Gagal mengenkripsi pesan.'];
         }
-        $messageToStore = base64_encode($cipherText);
+        $messageToStore = $cipherText; 
     } else {
         $messageToStore = $message;
     }
@@ -272,7 +271,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
                     <div class="form-group">
                         <label for="message">Pesan Rahasia:</label>
                         <textarea name="message" id="message" placeholder="Masukkan pesan rahasia..." required><?php echo htmlspecialchars($message); ?></textarea>
-                        <p class="info-text">Opsional: gunakan kunci untuk mengenkripsi pesan (AES-128-ECB, disimpan base64 di metadata).</p>
+                        <p class="info-text">Opsional: gunakan kunci untuk mengenkripsi pesan (AES-128-ECB, disimpan biner langsung di metadata).</p>
                     </div>
 
                     <div class="form-group">
