@@ -26,7 +26,8 @@ function embedMessageInJpegMetadata($jpegPath, $message, $keyOrEmpty, $outputPat
         if ($cipherText === false) {
             return [false, 'Gagal mengenkripsi pesan.'];
         }
-        $messageToStore = $cipherText;
+        // Prefix penanda agar dekripsi tahu bahwa konten terenkripsi
+        $messageToStore = 'ENC:' . $cipherText;
     } else {
         $messageToStore = $message;
     }
@@ -271,7 +272,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
                     <div class="form-group">
                         <label for="message">Pesan Rahasia:</label>
                         <textarea name="message" id="message" placeholder="Masukkan pesan rahasia..." required><?php echo htmlspecialchars($message); ?></textarea>
-                        <p class="info-text">Opsional: gunakan kunci untuk mengenkripsi pesan (AES-128-ECB, disimpan biner langsung di metadata).</p>
+                        <p class="info-text">Opsional: gunakan kunci untuk mengenkripsi pesan (AES-128-ECB). Metadata akan menyimpan ciphertext dengan penanda khusus.</p>
                     </div>
 
                     <div class="form-group">

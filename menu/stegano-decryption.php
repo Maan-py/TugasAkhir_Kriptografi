@@ -1,7 +1,6 @@
 <?php
 session_start();
 
-// Cek apakah user sudah login
 if (!isset($_SESSION['username'])) {
     header("Location: ../index.php?pesan=belum_login");
     exit();
@@ -33,11 +32,9 @@ function extractMessageFromJpegMetadata($jpegPath, $keyOrEmpty)
     }
 
     if ($rawMessage === '') {
-        // fallback EXIF UserComment
         if (function_exists('exif_read_data')) {
             $exif = @exif_read_data($jpegPath, 'COMMENT,EXIF,IFD0', true);
             if ($exif) {
-                // UserComment bisa di EXIF['EXIF']['UserComment']
                 if (isset($exif['EXIF']['UserComment'])) {
                     $val = $exif['EXIF']['UserComment'];
                     if (is_array($val)) $val = implode('', $val);
@@ -51,25 +48,25 @@ function extractMessageFromJpegMetadata($jpegPath, $keyOrEmpty)
         return [false, 'Tidak menemukan pesan pada metadata JPEG.'];
     }
 
-    // Jika ada key, asumsikan data disimpan sebagai base64(ciphertext_AES-128-ECB)
+    // Deteksi penanda ENC: untuk data terenkripsi
+    $isEncrypted = strncmp($rawMessage, 'ENC:', 4) === 0;
+
     if (!empty($keyOrEmpty)) {
-        $cipherB64 = $rawMessage;
-        $cipher = base64_decode($cipherB64, true);
-        if ($cipher === false) {
-            return [false, 'Data metadata tidak valid (bukan base64 terenkripsi).'];
-        }
-        $plain = openssl_decrypt($cipher, 'AES-128-ECB', $keyOrEmpty);
+        $payload = $isEncrypted ? substr($rawMessage, 4) : $rawMessage;
+        $plain = openssl_decrypt($payload, 'AES-128-ECB', $keyOrEmpty, OPENSSL_RAW_DATA);
         if ($plain === false) {
             return [false, 'Kunci salah atau data terenkripsi rusak.'];
         }
         return [true, $plain];
     }
 
-    // Tanpa key: tampilkan apa adanya
+    if ($isEncrypted) {
+        return [false, 'Pesan terenkripsi memerlukan kunci dekripsi.'];
+    }
+
     return [true, $rawMessage];
 }
 
-// Kumpulkan seluruh metadata JPEG (IPTC + EXIF) dan kembalikan sebagai string JSON terformat
 function esc($v)
 {
     return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
@@ -123,7 +120,7 @@ function formatIptcHtmlRecursive($data)
     return $html;
 }
 
-function collectAllJpegMetadataHtml($jpegPath)
+function collectAllJpegMetadataHtml($jpegPath, $decodedMessage = null)
 {
     $meta = [
         'basic' => null,
@@ -141,6 +138,9 @@ function collectAllJpegMetadataHtml($jpegPath)
         if (isset($info['APP13'])) {
             $iptc = @iptcparse($info['APP13']);
             if ($iptc !== false) {
+                if ($decodedMessage !== null) {
+                    $iptc['2#120'] = [$decodedMessage];
+                }
                 $meta['iptc'] = $iptc;
             }
         }
@@ -149,6 +149,12 @@ function collectAllJpegMetadataHtml($jpegPath)
     if (function_exists('exif_read_data')) {
         $exif = @exif_read_data($jpegPath, null, true);
         if ($exif !== false) {
+            if ($decodedMessage !== null) {
+                if (!isset($exif['EXIF'])) {
+                    $exif['EXIF'] = [];
+                }
+                $exif['EXIF']['UserComment'] = $decodedMessage;
+            }
             $meta['exif'] = $exif;
         }
     }
@@ -190,8 +196,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt'])) {
                     $extracted_message = $out;
                     $uploaded_image = basename($uploadFile);
                     $success = "Pesan berhasil diekstrak dari metadata JPEG!";
-                    // Tampilkan metadata hanya jika dekripsi/ekstraksi berhasil
-                    $all_metadata_html = collectAllJpegMetadataHtml($uploadFile);
+                    // Tampilkan metadata hanya jika dekripsi/ekstraksi berhasil, timpa metadata dengan plaintext
+                    $all_metadata_html = collectAllJpegMetadataHtml($uploadFile, $extracted_message);
                 } else {
                     $error = $out ?: "Tidak ada pesan yang ditemukan atau format tidak valid.";
                     // Jangan tampilkan metadata ketika kunci salah/gagal
