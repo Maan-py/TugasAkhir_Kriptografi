@@ -11,9 +11,10 @@ include "../php/koneksi.php";
 $error = "";
 $success = "";
 $encrypted_file = "";
+$encrypted_filename_display = "";
 $original_filename = "";
 
-$lastCryptoError = ""; 
+$lastCryptoError = "";
 
 // Fungsi untuk mengenkripsi file menggunakan RC2-CBC
 function encryptFile($filePath, $outputPath, $password)
@@ -35,7 +36,7 @@ function encryptFile($filePath, $outputPath, $password)
     }
 
     try {
-        $magic = "RC2FILEv1"; 
+        $magic = "RC2FILEv1";
         $hmac16 = substr(hash_hmac('sha256', $fileData, $key, true), 0, 16);
         $payload = $magic . $hmac16 . $fileData;
 
@@ -76,19 +77,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
         $fileExtension = pathinfo($original_filename, PATHINFO_EXTENSION);
         $fileBaseName = pathinfo($original_filename, PATHINFO_FILENAME);
 
-        $uploadFile = $uploadDir . uniqid() . '_' . $original_filename;
-        $encryptedFileName = $fileBaseName . '_encrypted.' . $fileExtension . '.enc';
-        $outputFile = $uploadDir . $encryptedFileName;
+        // Gunakan temp file untuk proses
+        $tempFile = sys_get_temp_dir() . '/' . uniqid() . '_' . $original_filename;
 
-        if (move_uploaded_file($_FILES['file']['tmp_name'], $uploadFile)) {
-            if (encryptFile($uploadFile, $outputFile, $password)) {
-                $encrypted_file = $encryptedFileName;
+        // Generate token unik untuk file hasil
+        $token = uniqid('enc_', true) . '_' . time();
+        $outputFile = $uploadDir . $token;
+
+        if (move_uploaded_file($_FILES['file']['tmp_name'], $tempFile)) {
+            if (encryptFile($tempFile, $outputFile, $password)) {
+                $encrypted_file = $token;
+                $encrypted_filename_display = $fileBaseName . '_encrypted.' . $fileExtension . '.enc';
                 $success = "File berhasil dienkripsi!";
-                // Hapus file upload original
-                unlink($uploadFile);
+                // Hapus temp file
+                unlink($tempFile);
             } else {
                 $error = "Gagal mengenkripsi file! " . ($lastCryptoError ? $lastCryptoError : "Pastikan file valid dan tidak korup.");
-                unlink($uploadFile);
+                unlink($tempFile);
             }
         } else {
             $error = "Gagal mengunggah file!";
@@ -290,6 +295,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
 
                 <?php if (!empty($success)): ?>
                     <div class="alert alert-success"><?php echo htmlspecialchars($success); ?></div>
+                <?php endif; ?>
+
+                <?php if (!empty($encrypted_file)): ?>
+                    <div class="file-info" style="margin-bottom: 1rem;">
+                        <strong>File Terenkripsi:</strong> <?php echo htmlspecialchars($encrypted_filename_display ?: $encrypted_file); ?>
+                    </div>
+                    <div class="btn-group" style="margin-bottom: 1.5rem;">
+                        <a href="../php/download.php?token=<?php echo urlencode($encrypted_file); ?>&type=encrypted&filename=<?php echo urlencode($encrypted_filename_display ?: $encrypted_file); ?>" class="btn btn-download">Download File Terenkripsi</a>
+                    </div>
                 <?php endif; ?>
 
                 <form method="POST" action="" enctype="multipart/form-data">

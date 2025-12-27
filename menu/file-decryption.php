@@ -12,9 +12,10 @@ include "../php/koneksi.php";
 $error = "";
 $success = "";
 $decrypted_file = "";
+$decrypted_filename_display = "";
 $original_filename = "";
 
-$lastCryptoError = ""; 
+$lastCryptoError = "";
 
 function decryptFile($filePath, $outputPath, $password)
 {
@@ -124,18 +125,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt'])) {
                 $decryptedFileName = 'decrypted_' . time() . '.file';
             }
 
-            $uploadFile = $uploadDir . uniqid() . '_' . $original_filename;
-            $outputFile = $uploadDir . $decryptedFileName;
+            // Gunakan temp file untuk proses
+            $tempFile = sys_get_temp_dir() . '/' . uniqid() . '_' . $original_filename;
 
-            if (move_uploaded_file($_FILES['file']['tmp_name'], $uploadFile)) {
-                if (decryptFile($uploadFile, $outputFile, $password)) {
-                    $decrypted_file = $decryptedFileName;
+            // Generate token unik untuk file hasil
+            $token = uniqid('dec_', true) . '_' . time();
+            $outputFile = $uploadDir . $token;
+
+            if (move_uploaded_file($_FILES['file']['tmp_name'], $tempFile)) {
+                if (decryptFile($tempFile, $outputFile, $password)) {
+                    $decrypted_file = $token;
+                    $decrypted_filename_display = $decryptedFileName;
                     $success = "File berhasil didekripsi!";
-                    // Hapus file upload terenkripsi
-                    unlink($uploadFile);
+                    // Hapus temp file
+                    unlink($tempFile);
                 } else {
                     $error = "Gagal mendekripsi file! " . ($lastCryptoError ? $lastCryptoError : "Password salah atau file korup/tidak valid.");
-                    unlink($uploadFile);
+                    unlink($tempFile);
                 }
             } else {
                 $error = "Gagal mengunggah file!";
@@ -321,6 +327,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['decrypt'])) {
 
                 <?php if (!empty($success)): ?>
                     <div class="alert alert-success"><?php echo htmlspecialchars($success); ?></div>
+                <?php endif; ?>
+
+                <?php if (!empty($decrypted_file)): ?>
+                    <div class="file-info" style="margin-bottom: 1rem;">
+                        <strong>File Terdekripsi:</strong> <?php echo htmlspecialchars($decrypted_filename_display ?: $decrypted_file); ?>
+                    </div>
+                    <div class="btn-group" style="margin-bottom: 1.5rem;">
+                        <a href="../php/download.php?token=<?php echo urlencode($decrypted_file); ?>&type=decrypted&filename=<?php echo urlencode($decrypted_filename_display ?: $decrypted_file); ?>" class="btn btn-download">Download File Terdekripsi</a>
+                    </div>
                 <?php endif; ?>
 
                 <form method="POST" action="" enctype="multipart/form-data">
