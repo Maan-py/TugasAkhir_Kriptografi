@@ -12,7 +12,6 @@ include "../php/koneksi.php";
 $error = "";
 $success = "";
 $output_image = "";
-$output_image_display = "";
 $message = "";
 
 function embedMessageInJpegMetadata($jpegPath, $message, $keyOrEmpty, $outputPath)
@@ -67,23 +66,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
         if (!in_array($fileType, $allowedTypes)) {
             $error = "Hanya file JPG yang didukung untuk EXIF/IPTC steganografi!";
         } else {
-            // Gunakan temp file untuk proses
-            $tempFile = sys_get_temp_dir() . '/' . uniqid() . '_' . basename($_FILES['image']['name']);
-            
-            // Generate token unik untuk file hasil
-            $token = uniqid('stego_', true) . '_' . time() . '.jpg';
-            $outputFile = $uploadDir . $token;
+            $uploadFile = $uploadDir . uniqid() . '_' . basename($_FILES['image']['name']);
+            $outputFile = $uploadDir . 'stego_' . uniqid() . '.jpg';
 
-            if (move_uploaded_file($_FILES['image']['tmp_name'], $tempFile)) {
-                list($ok, $err) = embedMessageInJpegMetadata($tempFile, $message, $keyInput, $outputFile);
+            if (move_uploaded_file($_FILES['image']['tmp_name'], $uploadFile)) {
+                list($ok, $err) = embedMessageInJpegMetadata($uploadFile, $message, $keyInput, $outputFile);
                 if ($ok) {
-                    $output_image = $token;
-                    $output_image_display = 'stego_' . basename($_FILES['image']['name']);
+                    $output_image = basename($outputFile);
                     $success = "Pesan berhasil disembunyikan ke dalam metadata JPEG!";
                 } else {
                     $error = $err ?: "Gagal menyembunyikan pesan.";
                 }
-                if (file_exists($tempFile)) unlink($tempFile);
+                if (file_exists($uploadFile)) unlink($uploadFile);
             } else {
                 $error = "Gagal mengunggah gambar!";
             }
@@ -266,15 +260,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['encrypt'])) {
 
                 <?php if (!empty($success)): ?>
                     <div class="alert alert-success"><?php echo htmlspecialchars($success); ?></div>
-                <?php endif; ?>
-
-                <?php if (!empty($output_image)): ?>
-                    <div class="file-info" style="margin-bottom: 1rem;">
-                        <strong>Gambar dengan Pesan Tersembunyi:</strong> <?php echo htmlspecialchars($output_image_display ?: $output_image); ?>
-                    </div>
-                    <div class="btn-group" style="margin-bottom: 1.5rem;">
-                        <a href="../php/download.php?token=<?php echo urlencode($output_image); ?>&type=stegano&filename=<?php echo urlencode($output_image_display ?: $output_image); ?>" class="btn btn-download">Download Gambar Terenkripsi</a>
-                    </div>
                 <?php endif; ?>
 
                 <form method="POST" action="" enctype="multipart/form-data">

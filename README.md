@@ -25,9 +25,8 @@ Aplikasi **Brankas Pribadi** adalah sistem keamanan data yang memungkinkan pengg
 
 ### 🖼️ Brankas Pesan Rahasia Gambar
 
-- **Sembunyikan Pesan di Gambar**: Sisipkan pesan rahasia di dalam file gambar menggunakan steganografi EXIF/IPTC
+- **Sembunyikan Pesan di Gambar**: Sisipkan pesan rahasia di dalam file gambar (Steganografi)
 - **Periksa Pesan di Gambar**: Ekstrak dan baca pesan rahasia yang ada di dalam gambar
-- **Enkripsi Opsional**: Pesan dapat dienkripsi dengan AES-128-ECB sebelum disisipkan ke gambar
 
 ### 👤 Sistem Autentikasi
 
@@ -40,68 +39,12 @@ Aplikasi **Brankas Pribadi** adalah sistem keamanan data yang memungkinkan pengg
 
 - **Backend**: PHP 8.2+
 - **Database**: MySQL/MariaDB
-- **Library Kriptografi**: phpseclib3 (RC2, RC4, RSA)
-- **Extension PHP**: OpenSSL (untuk AES)
-
-## 🔐 Algoritma Kriptografi yang Digunakan
-
-### 1. Enkripsi/Dekripsi Teks (Catatan Pribadi)
-
-#### Data Pribadi (Nama, Telepon, Alamat, dll)
-- **Algoritma**: **RC4 (Rivest Cipher 4)**
-- **Library**: phpseclib3
-- **Encoding**: Hexadecimal
-- **Metode**: Stream cipher dengan Key-Scheduling Algorithm (KSA)
-- **Keamanan**: Setiap field dienkripsi secara terpisah dengan keystream berkelanjutan
-
-#### Catatan Rahasia (Pesan Bebas)
-- **Algoritma**: **Double Encryption (Vigenere Cipher + RSA)**
-- **Lapis 1 - Vigenere Cipher**:
-  - Substitusi polyalphabetic cipher
-  - Menggunakan kunci string untuk enkripsi karakter per karakter
-  - Hanya mengenkripsi karakter alfabet (A-Z, a-z)
-- **Lapis 2 - RSA Encryption**:
-  - Asymmetric encryption dengan key pair (p, q, e, d)
-  - Menggunakan phpseclib3 BigInteger untuk perhitungan
-  - Enkripsi per blok dengan ukuran berdasarkan modulus n
-  - Formula: c = m^e mod n (untuk enkripsi)
-- **Keamanan**: Perlindungan ganda dengan dua algoritma berbeda
-
-### 2. Enkripsi/Dekripsi File
-
-- **Algoritma**: **RC2-CBC (Rivest Cipher 2 - Cipher Block Chaining)**
-- **Library**: phpseclib3
-- **Key Derivation**: MD5 hash dari password (128-bit key)
-- **IV (Initialization Vector)**: 8 bytes random untuk setiap enkripsi
-- **Mode**: CBC (Cipher Block Chaining)
-- **Integritas Data**: 
-  - HMAC-SHA256 (16 bytes pertama) untuk verifikasi integritas
-  - Magic signature "RC2FILEv1" untuk validasi format
-- **Encoding Output**: Base64
-- **Format File**: 
-  - Struktur: IV (8 bytes) + Encrypted Payload
-  - Payload: Magic (10 bytes) + HMAC (16 bytes) + Plaintext
-- **Keamanan**: File tidak disimpan permanen, hanya tersedia untuk download sekali
-
-### 3. Steganografi (Penyembunyian Pesan dalam Gambar)
-
-- **Metode**: **EXIF/IPTC Metadata Embedding**
-- **Format Gambar**: JPEG/JPG
-- **Lokasi Penyimpanan**: 
-  - IPTC Caption tag (2:120) - prioritas utama
-  - EXIF UserComment - fallback jika IPTC tidak tersedia
-- **Enkripsi Pesan (Opsional)**:
-  - **Algoritma**: **AES-128-ECB** (Advanced Encryption Standard)
-  - **Library**: OpenSSL PHP Extension
-  - **Mode**: ECB (Electronic Codebook)
-  - **Penanda**: Prefix "ENC:" untuk menandai pesan terenkripsi
-- **Proses**:
-  1. Pesan (opsional dienkripsi dengan AES-128-ECB jika kunci diberikan)
-  2. Pesan disisipkan ke metadata IPTC/EXIF gambar
-  3. Gambar baru disimpan dengan metadata yang berisi pesan
-- **Keamanan**: 
-  - Metadata dapat dihapus oleh beberapa platform (media sosial, dll)
-  - Enkripsi opsional memberikan lapisan keamanan tambahan
+- **Library Kriptografi**: phpseclib3 (RC4, RSA)
+- **Algoritma Kriptografi**:
+  - Vigenere Cipher
+  - RC4 Encryption
+  - RSA Encryption
+  - Steganografi (LSB - Least Significant Bit)
 
 ## 📦 Persyaratan Sistem
 
