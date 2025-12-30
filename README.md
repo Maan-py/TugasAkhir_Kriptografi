@@ -44,7 +44,7 @@ Aplikasi **Brankas Pribadi** adalah sistem keamanan data yang memungkinkan pengg
   - Vigenere Cipher
   - RC4 Encryption
   - RSA Encryption
-  - Steganografi (LSB - Least Significant Bit)
+  - Steganografi (EXIF)
 
 ## 📦 Persyaratan Sistem
 
